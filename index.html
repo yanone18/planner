@@ -35,8 +35,9 @@ button,input,textarea{font:inherit}
 @keyframes slideFromLeft{from{transform:translateX(-28px);opacity:.65}to{transform:translateX(0);opacity:1}}
 .dayrow{min-height:38px;display:flex;align-items:stretch;background:#fff;border-bottom:1px solid #edf0f4}
 .dayrow.rest,.task-date.rest{background:#fff9df}
-.date{width:76px;flex:0 0 76px;display:flex;align-items:center;justify-content:flex-end;padding:0 4px 0 10px;text-align:right;font-size:16px;white-space:nowrap;user-select:none;color:#526175;border:0}
-.month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:16px;font-weight:500}
+.date{width:76px;flex:0 0 76px;display:flex;align-items:center;justify-content:flex-end;padding:0 4px 0 10px;text-align:right;font-size:18px;white-space:nowrap;user-select:none;color:#526175;border:0}
+.date-weekday{margin-left:-2px}
+.month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:18px;font-weight:500}
 .date.sat,.task-date.sat{color:#1769bd}
 .date.sun,.task-date.sun{color:#c03d4a}
 .entry{flex:1;min-width:0;display:flex;align-items:center;padding:1px 4px 1px 2px}
@@ -46,7 +47,7 @@ button,input,textarea{font:inherit}
 .entry input:focus{-webkit-user-select:text;user-select:text}
 .entry input:focus,.taskrow input:focus{background:#f4f8ff}
 .task-day{padding:0 0 10px}
-.task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
+.task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:19px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
 .taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:#fff;overflow:hidden;border-bottom:1px solid #f1f3f6}
 .taskrow input{flex:1;transition:transform .18s ease}
 .taskrow.swiped input{transform:translateX(-66px)}
@@ -83,6 +84,7 @@ const today=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const weekday=['日','月','火','水','木','金','土'];
 const label=d=>`${d.getDate()}日(${weekday[d.getDay()]})`;
+const setDateLabel=(el,d)=>{el.replaceChildren();el.append(document.createTextNode(`${d.getDate()}日`));const wd=h('span','date-weekday',`(${weekday[d.getDay()]})`);el.append(wd)};
 const monthLabel=d=>`${d.getFullYear()}年${d.getMonth()+1}月`;
 const color=d=>d.getDay()===0?'sun':d.getDay()===6?'sat':'';
 const h=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el};
@@ -136,7 +138,7 @@ const render=restore=>{
  if(current==='予定表'){
   const start=today(),end=new Date(start.getFullYear()+5,start.getMonth(),start.getDate());let d=new Date(start);
   let shownMonth='';
-  while(d<=end){const id=iso(d),monthKey=`${d.getFullYear()}-${d.getMonth()}`;if(monthKey!==shownMonth){const mh=h('div','month-header',monthLabel(d));sheet.append(mh);shownMonth=monthKey}const row=h('div','dayrow'+(state.rest[id]?' rest':'')),date=h('div','date '+color(d),label(d)),entry=h('div','entry'),inp=h('input');
+  while(d<=end){const id=iso(d),monthKey=`${d.getFullYear()}-${d.getMonth()}`;if(monthKey!==shownMonth){const mh=h('div','month-header',monthLabel(d));sheet.append(mh);shownMonth=monthKey}const row=h('div','dayrow'+(state.rest[id]?' rest':'')),date=h('div','date '+color(d)),entry=h('div','entry'),inp=h('input');setDateLabel(date,d);
    date.title='タップで休みを切り替え';date.onclick=()=>{if(editing)return;state.rest[id]=!state.rest[id];save();row.classList.toggle('rest',!!state.rest[id])};
    inp.type='text';inp.value=scheduleValue(id,d);inp.setAttribute('aria-label',`${id}の予定`);inp.oninput=()=>{state.schedule[id]=inp.value;save()};
    inputEvents(inp);
@@ -150,7 +152,7 @@ const render=restore=>{
   sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){
   get8Days().forEach(d=>{
-   const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d),label(d));head.classList.toggle('rest',!!state.rest[id]);group.append(head);
+   const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d));setDateLabel(head,d);head.classList.toggle('rest',!!state.rest[id]);group.append(head);
    const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
    tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};row.append(inp,del);group.append(row)});
    const add=h('button','addtask','＋ ToDoを追加');add.onclick=()=>{state.tasksByDate[id].push('');save();render(false);const groups=sheet.querySelectorAll('.task-day'),gi=get8Days().findIndex(x=>iso(x)===id),last=groups[gi]?.querySelectorAll('input');const target=last?.[last.length-1];if(target){target.focus();target.scrollIntoView({block:'nearest'})}};group.append(add);sheet.append(group);
