@@ -35,8 +35,8 @@ button,input,textarea{font:inherit}
 @keyframes slideFromLeft{from{transform:translateX(-28px);opacity:.65}to{transform:translateX(0);opacity:1}}
 .dayrow{min-height:38px;display:flex;align-items:stretch;background:#fff;border-bottom:1px solid #edf0f4}
 .dayrow.rest,.task-date.rest{background:#fff9df}
-.date{width:76px;flex:0 0 76px;display:flex;align-items:center;justify-content:flex-end;padding:0 4px 0 10px;text-align:right;font-size:14px;white-space:nowrap;user-select:none;color:#526175;border:0}
-.month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:14px;font-weight:500}
+.date{width:76px;flex:0 0 76px;display:flex;align-items:center;justify-content:flex-end;padding:0 4px 0 10px;text-align:right;font-size:16px;white-space:nowrap;user-select:none;color:#526175;border:0}
+.month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:16px;font-weight:500}
 .date.sat,.task-date.sat{color:#1769bd}
 .date.sun,.task-date.sun{color:#c03d4a}
 .entry{flex:1;min-width:0;display:flex;align-items:center;padding:1px 4px 1px 2px}
@@ -46,7 +46,7 @@ button,input,textarea{font:inherit}
 .entry input:focus{-webkit-user-select:text;user-select:text}
 .entry input:focus,.taskrow input:focus{background:#f4f8ff}
 .task-day{padding:0 0 10px}
-.task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:15px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
+.task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
 .taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:#fff;overflow:hidden;border-bottom:1px solid #f1f3f6}
 .taskrow input{flex:1;transition:transform .18s ease}
 .taskrow.swiped input{transform:translateX(-66px)}
@@ -82,7 +82,7 @@ const $=id=>document.getElementById(id);
 const today=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const weekday=['日','月','火','水','木','金','土'];
-const label=d=>`${d.getDate()}日（${weekday[d.getDay()]}）`;
+const label=d=>`${d.getDate()}日(${weekday[d.getDay()]})`;
 const monthLabel=d=>`${d.getFullYear()}年${d.getMonth()+1}月`;
 const color=d=>d.getDay()===0?'sun':d.getDay()===6?'sat':'';
 const h=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el};
