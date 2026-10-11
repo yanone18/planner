@@ -22,6 +22,7 @@ button,input,textarea{font:inherit}
 .tabs{display:flex;gap:3px}
 .tab{flex:1;min-width:0;padding:9px 2px;background:transparent;border:0;border-bottom:2px solid transparent;color:#78879a;font-weight:600;font-size:14px;touch-action:pan-y}
 .tab.active{background:#fff;color:#294f83;border-bottom-color:#3973b5}
+.tab.reorder-source{background:#edf4ff;color:#294f83;border-radius:8px}.tab.reorder-target{outline:2px dashed #8aa8cf;outline-offset:-3px;border-radius:8px}
 .toolbar{flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 12px 5px;background:#fff;min-height:26px}
 .toolbar span{font-size:11px;color:#758397}
 .menu{border:0;background:transparent;font-size:21px;color:#315f97;padding:0 3px;line-height:1.2}
@@ -35,10 +36,14 @@ button,input,textarea{font:inherit}
 .dayrow{min-height:38px;display:flex;align-items:stretch;background:#fff;border-bottom:1px solid #edf0f4}
 .dayrow.rest,.task-date.rest{background:#fff9df}
 .date{width:76px;flex:0 0 76px;display:flex;align-items:center;justify-content:flex-end;padding:0 4px 0 10px;text-align:right;font-size:13px;white-space:nowrap;user-select:none;color:#526175;border:0}
+.month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:13px;font-weight:500}
 .date.sat,.task-date.sat{color:#1769bd}
 .date.sun,.task-date.sun{color:#c03d4a}
 .entry{flex:1;min-width:0;display:flex;align-items:center;padding:1px 4px 1px 2px}
-.entry input,.taskrow input{width:100%;min-width:0;background:transparent;border:0;outline:0;font-size:16px;color:#243247;padding:5px 2px;border-radius:0}
+.entry input,.taskrow input{width:100%;min-width:0;background:transparent;border:0;outline:0;font-size:17px;color:#243247;padding:5px 2px;border-radius:0}
+.entry input:not(:focus){-webkit-user-select:none;user-select:none}
+.entry input.longpress-pending{-webkit-user-select:none!important;user-select:none!important}
+.entry input:focus{-webkit-user-select:text;user-select:text}
 .entry input:focus,.taskrow input:focus{background:#f4f8ff}
 .task-day{padding:0 0 10px}
 .task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:14px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
@@ -49,7 +54,7 @@ button,input,textarea{font:inherit}
 .taskrow.swiped .delete{display:block}
 .addtask{width:100%;text-align:left;padding:6px 15px 6px 33px;border:0;background:#fff;color:#8793a3;font-size:14px}
 .memo{padding:12px 15px;background:#fff;height:100%;min-height:100%;display:flex;flex-direction:column}
-.memo textarea{display:block;flex:1;width:100%;height:100%;min-height:0;resize:none;overflow:auto;border:0;outline:0;background:#fff;font:15px/1.8 -apple-system,BlinkMacSystemFont,sans-serif;color:#243247;caret-color:#315f97;touch-action:auto}
+.memo textarea{display:block;flex:1;width:100%;height:100%;min-height:0;resize:none;overflow:auto;border:0;outline:0;background:#fff;font:17px/1.7 -apple-system,BlinkMacSystemFont,sans-serif;color:#243247;caret-color:#315f97;touch-action:auto}
 .today{position:fixed;z-index:4;right:max(16px,calc((100vw - 650px)/2 + 16px));bottom:max(18px,env(safe-area-inset-bottom));border:0;border-radius:50%;width:46px;height:46px;background:#315f97;color:white;font-size:23px;box-shadow:0 3px 12px #263e6229}
 .hidden{display:none!important}
 .trashview{padding:14px}
@@ -77,7 +82,8 @@ const $=id=>document.getElementById(id);
 const today=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const weekday=['日','月','火','水','木','金','土'];
-const label=d=>`${d.getMonth()+1}/${d.getDate()}（${weekday[d.getDay()]}）`;
+const label=d=>`${d.getDate()}日（${weekday[d.getDay()]}）`;
+const monthLabel=d=>`${d.getFullYear()}年${d.getMonth()+1}月`;
 const color=d=>d.getDay()===0?'sun':d.getDay()===6?'sat':'';
 const h=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el};
 const storageKey='planner-prototype-v1';
@@ -92,7 +98,7 @@ if(Array.isArray(state.tasks)&&state.tasks.length){
 let current=state.order.includes('予定表')?'予定表':state.order[0],editing=false,active=null,scrolls={},transitionDirection=1;
 const save=()=>localStorage.setItem(storageKey,JSON.stringify(state));
 const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date(d);x.setDate(d.getDate()+i);arr.push(x)}return arr};
-const isRepeatMatch=(rule,d)=>{const start=new Date(rule.start+'T00:00:00');if(d<start)return false;if(rule.until&&iso(d)>rule.until)return false;if(rule.freq==='daily')return true;if(rule.freq==='weekly')return d.getDay()===start.getDay();if(rule.freq==='monthly')return d.getDate()===start.getDate();if(rule.freq==='yearly')return d.getMonth()===start.getMonth()&&d.getDate()===start.getDate();return false};
+const isRepeatMatch=(rule,d)=>{const start=new Date(rule.start+'T00:00:00');if(d<start)return false;if(rule.until&&iso(d)>rule.until)return false;if(rule.freq==='daily')return true;if(rule.freq==='weekly')return d.getDay()===start.getDay();if(rule.freq==='monthly')return d.getDate()===start.getDate();if(rule.freq==='yearly')return d.getMonth()===start.getMonth()&&d.getDate()===start.getDate();const interval=({months1:1,months3:3,months6:6})[rule.freq];if(interval){const monthDiff=(d.getFullYear()-start.getFullYear())*12+d.getMonth()-start.getMonth();return monthDiff>=0&&monthDiff%interval===0&&d.getDate()===start.getDate()}return false};
 const scheduleValue=(id,d)=>{if(state.schedule[id])return state.schedule[id];const rules=(state.repeats||[]).filter(r=>isRepeatMatch(r,d)).sort((a,b)=>b.start.localeCompare(a.start));return rules.length?rules[0].text:''};
 const setEditing=(el)=>{editing=true;active=el;el.dataset.editing='1';};
 const finish=()=>{if(active)active.blur();editing=false;active=null;$('sheet').querySelectorAll('[data-editing]').forEach(e=>delete e.dataset.editing);render(false)};
@@ -102,28 +108,43 @@ const inputEvents=(el,opts={})=>{
  el.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&current!=='メモ'){e.preventDefault();if(opts.onEnter)opts.onEnter();else finish()}});
 };
 const showDialog=(title,desc,buttons)=>{const back=h('div','dialog-backdrop'),box=h('div','dialog');box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.append(h('h2','',title),h('p','',desc));const actions=h('div','dialog-actions');buttons.forEach(b=>{const btn=h('button',b.primary?'primary':'',b.label);btn.onclick=()=>{back.remove();b.action&&b.action()};actions.append(btn)});box.append(actions);back.append(box);document.body.append(back)};
-const repeatDialog=(id,d,text)=>{if(!text.trim()){showDialog('繰り返し設定','先にこの日の予定を入力してね。',[{label:'閉じる',primary:true}]);return}
- showDialog('繰り返し設定',`${label(d)}「${text}」を繰り返す頻度を選んでね。`,[
- {label:'毎週',action:()=>addRepeat(id,text,'weekly')},
- {label:'毎月',action:()=>addRepeat(id,text,'monthly')},
- {label:'毎年',action:()=>addRepeat(id,text,'yearly')},
- {label:'解除',action:()=>{state.repeats=state.repeats.filter(r=>!(r.start===id));save();render(false)}},
+const repeatDialog=(id,d,text)=>{if(!text.trim()){showDialog('繰り返し設定','先にこの日の予定を入力してください。',[{label:'閉じる',primary:true}]);return}
+ showDialog('繰り返し設定',`${label(d)}「${text}」
+繰り返す頻度を選んでください`,[
+ {label:'1カ月',action:()=>addRepeat(id,text,'months1')},
+ {label:'3カ月',action:()=>addRepeat(id,text,'months3')},
+ {label:'6カ月',action:()=>addRepeat(id,text,'months6')},
+ {label:'1年',action:()=>addRepeat(id,text,'yearly')},
+ {label:'解除',action:()=>{state.repeats=state.repeats.filter(r=>r.start!==id);save();render(false)}},
  {label:'キャンセル'}
  ])};
 const addRepeat=(id,text,freq)=>{state.repeats=state.repeats.filter(r=>r.start!==id);state.repeats.push({start:id,text,freq});save();render(false)};
-const tabs=()=>{const bar=$('tabs');bar.replaceChildren();state.order.forEach(name=>{const b=h('button','tab'+(name===current?' active':''),name);b.type='button';b.onclick=()=>switchTo(name);bar.append(b)})};
+let reorderSource=null,reorderTarget=null,reorderTimer=null,reorderTriggered=false;
+const paintTabReorder=()=>{$('tabs').querySelectorAll('.tab').forEach(b=>{b.classList.toggle('reorder-source',b.textContent===reorderSource);b.classList.toggle('reorder-target',!!reorderSource&&b.textContent===reorderTarget&&b.textContent!==reorderSource)})};
+const finishTabReorder=()=>{if(reorderSource&&reorderTarget&&reorderSource!==reorderTarget){const from=state.order.indexOf(reorderSource);if(from!==-1){state.order.splice(from,1);const to=state.order.indexOf(reorderTarget);state.order.splice(to,0,reorderSource);save()}}reorderSource=null;reorderTarget=null;$('status').textContent=current;tabs()};
+const tabs=()=>{const bar=$('tabs');bar.replaceChildren();state.order.forEach(name=>{const b=h('button','tab'+(name===current?' active':'')+(name===reorderSource?' reorder-source':'')+(name===reorderTarget&&name!==reorderSource?' reorder-target':''),name);b.type='button';
+ b.addEventListener('touchstart',e=>{reorderTriggered=false;clearTimeout(reorderTimer);const touch=e.touches[0];const x=touch.clientX,y=touch.clientY;reorderTimer=setTimeout(()=>{reorderTriggered=true;reorderSource=name;reorderTarget=name;paintTabReorder();$('status').textContent='タブを左右に動かして並び替え' },550);b.dataset.startX=x;b.dataset.startY=y},{passive:true});
+ b.addEventListener('touchmove',e=>{if(!reorderSource){clearTimeout(reorderTimer);return}e.preventDefault();const t=e.touches[0];const target=document.elementFromPoint(t.clientX,t.clientY)?.closest('.tab');if(target){reorderTarget=target.textContent;paintTabReorder()}},{passive:false});
+ b.addEventListener('touchend',()=>{clearTimeout(reorderTimer);if(reorderSource){finishTabReorder()}},{passive:true});
+ b.addEventListener('touchcancel',()=>{clearTimeout(reorderTimer);if(reorderSource){reorderSource=null;reorderTarget=null;$('status').textContent=current;tabs()}},{passive:true});
+ b.oncontextmenu=e=>{e.preventDefault();reorderSource=name;reorderTarget=name;paintTabReorder();$('status').textContent='タブを左右に動かして並び替え'};
+ b.onclick=()=>{if(reorderSource){finishTabReorder();return}if(reorderTriggered){reorderTriggered=false;return}switchTo(name)};bar.append(b)})};
 const switchTo=name=>{if(name===current)return;if(editing&&active)active.blur();editing=false;active=null;scrolls[current]=$('sheet').scrollTop;transitionDirection=state.order.indexOf(name)>state.order.indexOf(current)?1:-1;current=name;render(true)};
 const render=restore=>{
  tabs();const sheet=$('sheet');sheet.replaceChildren();sheet.classList.remove('transition-in-left','transition-in-right');
  $('status').textContent=current;$('today').classList.add('hidden');
  if(current==='予定表'){
   const start=today(),end=new Date(start.getFullYear()+5,start.getMonth(),start.getDate());let d=new Date(start);
-  while(d<=end){const id=iso(d),row=h('div','dayrow'+(state.rest[id]?' rest':'')),date=h('div','date '+color(d),label(d)),entry=h('div','entry'),inp=h('input');
+  let shownMonth='';
+  while(d<=end){const id=iso(d),monthKey=`${d.getFullYear()}-${d.getMonth()}`;if(monthKey!==shownMonth){const mh=h('div','month-header',monthLabel(d));sheet.append(mh);shownMonth=monthKey}const row=h('div','dayrow'+(state.rest[id]?' rest':'')),date=h('div','date '+color(d),label(d)),entry=h('div','entry'),inp=h('input');
    date.title='タップで休みを切り替え';date.onclick=()=>{if(editing)return;state.rest[id]=!state.rest[id];save();row.classList.toggle('rest',!!state.rest[id])};
    inp.type='text';inp.value=scheduleValue(id,d);inp.setAttribute('aria-label',`${id}の予定`);inp.oninput=()=>{state.schedule[id]=inp.value;save()};
    inputEvents(inp);
-   let swipeStart=null;entry.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;swipeStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});
-   entry.addEventListener('touchend',e=>{if(!swipeStart)return;const dx=e.changedTouches[0].clientX-swipeStart.x,dy=e.changedTouches[0].clientY-swipeStart.y;swipeStart=null;if(dx < -55 && Math.abs(dx)>Math.abs(dy)*1.5){if(active)active.blur();editing=false;active=null;repeatDialog(id,d,inp.value||scheduleValue(id,d))}},{passive:true});
+   let pressStart=null,pressMoved=false,longPress=false;
+   entry.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;pressStart={x:e.touches[0].clientX,y:e.touches[0].clientY,time:Date.now(),wasEditing:editing};pressMoved=false;longPress=false;if(!editing)inp.classList.add('longpress-pending')},{passive:true});
+   entry.addEventListener('touchmove',e=>{if(!pressStart)return;const dx=e.touches[0].clientX-pressStart.x,dy=e.touches[0].clientY-pressStart.y;if(Math.abs(dx)>9||Math.abs(dy)>9)pressMoved=true},{passive:true});
+   entry.addEventListener('touchend',e=>{if(!pressStart)return;const elapsed=Date.now()-pressStart.time;const shouldRepeat=!pressStart.wasEditing&&!pressMoved&&elapsed>=550;pressStart=null;inp.classList.remove('longpress-pending');if(shouldRepeat){longPress=true;e.preventDefault();if(active)active.blur();editing=false;active=null;repeatDialog(id,d,inp.value||scheduleValue(id,d));setTimeout(()=>{longPress=false},350)}},{passive:false});
+   entry.addEventListener('contextmenu',e=>{if(!editing){e.preventDefault();if(active)active.blur();editing=false;active=null;repeatDialog(id,d,inp.value||scheduleValue(id,d))}});
    entry.append(inp);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
   }
   sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
@@ -140,7 +161,7 @@ const render=restore=>{
  if(restore)sheet.scrollTop=scrolls[current]||0;else sheet.scrollTop=0;
  if(!restore){sheet.classList.add(transitionDirection>0?'transition-in-right':'transition-in-left')}
 };
-$('menu').onclick=()=>{if(editing)return;if(current==='ToDo')showDialog('ToDo','削除したい項目を左にスワイプして「削除」を押してね。',[{label:'閉じる',primary:true}]);else if(current==='予定表')showDialog('予定表','繰り返し設定は、入力を終えた予定の内容を左にスワイプして開けるよ。',[{label:'閉じる',primary:true}]);else showDialog('メモ','入力した内容は自動保存されるよ。',[{label:'閉じる',primary:true}])};
+$('menu').onclick=()=>{if(editing)return;if(current==='ToDo')showDialog('ToDo','削除したい項目を左にスワイプして「削除」を押してね。',[{label:'閉じる',primary:true}]);else if(current==='予定表')showDialog('予定表','入力を終了した予定を長押しすると、繰り返し設定を開けます。',[{label:'閉じる',primary:true}]);else showDialog('メモ','入力した内容は自動保存されるよ。',[{label:'閉じる',primary:true}])};
 $('today').onclick=()=>{$('sheet').scrollTo({top:0,behavior:'smooth'})};
 // 画面切り替えは上部タブのタップのみ。横スワイプは各項目の操作に使う。
 save();render(false);
