@@ -79,8 +79,11 @@ button,input,textarea{font:inherit}
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
-const syncViewport=()=>{const vv=window.visualViewport;const height=vv?vv.height:window.innerHeight;document.querySelector('.app').style.height=height+'px';if(vv)document.querySelector('.app').style.top=vv.offsetTop+'px'};
-window.addEventListener('resize',syncViewport);if(window.visualViewport){window.visualViewport.addEventListener('resize',syncViewport);window.visualViewport.addEventListener('scroll',syncViewport)}syncViewport();
+// Keep the app anchored to the top. On iOS, visualViewport.offsetTop changes while
+// the keyboard opens and can push the editor away from the tapped text. Resize the
+// available height only; do not move the whole app in response to viewport scrolling.
+const syncViewport=()=>{const vv=window.visualViewport;const height=vv?vv.height:window.innerHeight;const app=document.querySelector('.app');app.style.height=height+'px';app.style.top='0px'};
+window.addEventListener('resize',syncViewport);if(window.visualViewport){window.visualViewport.addEventListener('resize',syncViewport)}syncViewport();
 const today=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const weekday=['日','月','火','水','木','金','土'];
@@ -127,7 +130,7 @@ const scheduleValue=(id,d)=>{
 const setEditing=(el)=>{editing=true;active=el;el.dataset.editing='1';};
 const finish=()=>{if(active)active.blur();editing=false;active=null;$('sheet').querySelectorAll('[data-editing]').forEach(e=>delete e.dataset.editing);render(false)};
 const inputEvents=(el,opts={})=>{
- el.addEventListener('focus',()=>setEditing(el));
+ el.addEventListener('focus',()=>{setEditing(el);if(el.tagName==='TEXTAREA'){requestAnimationFrame(()=>{syncViewport();el.focus({preventScroll:true})})}});
  el.addEventListener('blur',()=>{if(active===el){editing=false;active=null;}});
  el.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&current!=='メモ'){e.preventDefault();if(opts.onEnter)opts.onEnter();else finish()}});
 };
