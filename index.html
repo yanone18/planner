@@ -44,6 +44,8 @@ button,input,textarea{font:inherit}
 .entry input:not(:focus){-webkit-user-select:none;user-select:none}
 .entry input:focus{-webkit-user-select:text;user-select:text}
 .entry input:focus,.taskrow input:focus{background:transparent}
+.repeat-button{display:none;flex:none;width:32px;height:32px;padding:4px;border:0;background:transparent;color:#315f97;font-size:24px;align-items:center;justify-content:center}
+.entry:focus-within .repeat-button{display:flex}
 .task-day{margin:8px 10px 12px;padding:0 0 7px;border-radius:10px;background:#f7f9fc;overflow:visible}
 .task-day.rest{background:#fff9df}
 .task-date > span:first-child{display:inline-flex;align-items:center;gap:9px}
@@ -106,8 +108,8 @@ let state;try{state=JSON.parse(localStorage.getItem(storageKey))}catch{}
 state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[]},state||{});
 if(!state.tasksByDate)state.tasksByDate={};
 // Remove obsolete repeat rules; preserve manually entered original schedule entries.
- state.repeats=[];delete state.repeatOverrides;
-state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
+state.repeats=Array.isArray(state.repeats)?state.repeats:[];state.repeatExceptions=state.repeatExceptions||{};
+state.repeatExceptions=state.repeatExceptions||{};state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
 // Preserve the previous single ToDo list by moving it to today's list only once.
 if(Array.isArray(state.tasks)&&state.tasks.length){
  const k=iso(today());state.tasksByDate[k]=[...(state.tasksByDate[k]||[]),...state.tasks];state.tasks=[]; 
@@ -122,7 +124,27 @@ const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date
   for(const piece of segments){if(isEmoji(piece)&&current.trim()){parts.push(current.trim());current=piece}else current+=piece}
   if(current.trim())parts.push(current.trim());return parts;
  };
- const scheduleValue=id=>state.schedule[id]||'';
+ const freqLabel={months1:'1か月ごと',months3:'3か月ごと',months6:'6か月ごと',yearly:'1年ごと'};
+ const intervalOf=f=>({months1:1,months3:3,months6:6,yearly:12})[f];
+ const addMonths=(start,n)=>{const d=new Date(start+'T12:00:00');const target=new Date(d.getFullYear(),d.getMonth()+n,1,12);target.setDate(Math.min(d.getDate(),new Date(target.getFullYear(),target.getMonth()+1,0).getDate()));return iso(target)};
+ const occurrence=(r,id)=>{if(id<r.start)return false;const a=new Date(r.start+'T12:00:00'),b=new Date(id+'T12:00:00');const months=(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth();return months>=0&&months%intervalOf(r.freq)===0&&addMonths(r.start,months)===id};
+ const repeatEvents=id=>state.repeats.filter(r=>occurrence(r,id)).map(r=>({rule:r,text:Object.prototype.hasOwnProperty.call(state.repeatExceptions,`${r.uid}|${id}`)?state.repeatExceptions[`${r.uid}|${id}`]:r.text})).filter(x=>x.text);
+ const scheduleValue=id=>[state.schedule[id]||'',...repeatEvents(id).filter(x=>x.rule.start!==id).map(x=>x.text)].filter(Boolean).join('');
+ const ruleFor=(id,text)=>state.repeats.find(r=>occurrence(r,id)&&(state.repeatExceptions[`${r.uid}|${id}`]??r.text)===text);
+ const updateAll=(r,text)=>{r.text=text;Object.keys(state.repeatExceptions).filter(k=>k.startsWith(r.uid+'|')).forEach(k=>delete state.repeatExceptions[k]);};
+ const confirmEdit=(id,oldText,newText)=>{const r=ruleFor(id,oldText);if(!r)return false;showDialog('繰り返し予定の編集','変更する範囲を選んでください。',[{label:'この予定だけ',action:()=>{state.repeatExceptions[`${r.uid}|${id}`]=newText;save();render(true)}},{label:'すべてに反映',action:()=>{updateAll(r,newText);save();render(true)}},{label:'キャンセル',action:()=>render(true)}]);return true;};
+ const repeatDialog=(id)=>{const items=splitEvents(scheduleValue(id));if(!items.length){showDialog('繰り返し設定','先に予定を入力してください。',[{label:'閉じる'}]);return;}
+  const choose=text=>{const r=ruleFor(id,text);const box=h('div','dialog-backdrop'),panel=h('div','dialog');panel.append(h('h2','','繰り返し設定'),h('p','',`対象：${text} ／ 現在：${r?freqLabel[r.freq]:'繰り返しなし'}`));
+   const select=h('select');select.style.cssText='width:100%;padding:12px;border:1px solid #d9e0e8;border-radius:9px;background:white;font:inherit';[['','繰り返しなし'],...Object.entries(freqLabel)].forEach(([v,l])=>{const o=h('option','',l);o.value=v;select.append(o)});select.value=r?.freq||'';panel.append(select);
+   const actions=h('div','dialog-actions');const btn=(name,fn,primary=false)=>{const b=h('button',primary?'primary':'',name);b.onclick=fn;actions.append(b)};
+   btn('キャンセル',()=>box.remove());btn('決定',()=>{const f=select.value;box.remove();if(!f){if(r)askRemove(r);return;}if(r){r.freq=f}else{state.repeats.push({uid:'r'+Date.now()+Math.random().toString(36).slice(2),start:id,text,freq:f});}save();render(true)},true);
+   if(r)btn('繰り返し解除',()=>{box.remove();askRemove(r)});
+   panel.append(actions);box.append(panel);document.body.append(box);
+  };
+  if(items.length===1)return choose(items[0]);showDialog('対象の予定を選択','繰り返し設定する項目を選んでください。',[...items.map(text=>({label:text,action:()=>choose(text)})),{label:'キャンセル'}]);
+ };
+ const askRemove=r=>showDialog('繰り返し解除','自動生成された予定をどうしますか？',[{label:'予定も削除',action:()=>removeRule(r,false)},{label:'予定を残す',action:()=>removeRule(r,true)},{label:'キャンセル'}]);
+ const removeRule=(r,keep)=>{if(keep){const a=new Date(r.start+'T12:00:00');for(let n=0;n<=72;n+=intervalOf(r.freq)){const id=addMonths(r.start,n);const d=new Date(id+'T12:00:00');if(d>new Date(today().getFullYear()+5,today().getMonth(),today().getDate()))break;if(id===r.start)continue;const v=state.repeatExceptions[`${r.uid}|${id}`]??r.text;if(v)state.schedule[id]=(state.schedule[id]||'')+v;}}state.repeats=state.repeats.filter(x=>x!==r);Object.keys(state.repeatExceptions).filter(k=>k.startsWith(r.uid+'|')).forEach(k=>delete state.repeatExceptions[k]);save();render(true);};
 const setEditing=(el)=>{editing=true;active=el;el.dataset.editing='1';};
 const finish=()=>{if(active)active.blur();editing=false;active=null;$('sheet').querySelectorAll('[data-editing]').forEach(e=>delete e.dataset.editing);render(false)};
 const inputEvents=(el,opts={})=>{
@@ -199,9 +221,14 @@ const render=restore=>{
   let shownMonth='';
   while(d<=end){const id=iso(d),monthKey=`${d.getFullYear()}-${d.getMonth()}`;if(monthKey!==shownMonth){const mh=h('div','month-header',monthLabel(d));sheet.append(mh);shownMonth=monthKey}const row=h('div','dayrow'+(state.rest[id]?' rest':'')),date=h('div','date '+color(d),label(d)),entry=h('div','entry'),inp=h('input');
    date.title='タップで休みを切り替え';date.onclick=()=>{if(editing)return;state.rest[id]=!state.rest[id];save();row.classList.toggle('rest',!!state.rest[id])};
-   inp.type='text';inp.value=scheduleValue(id,d);inp.setAttribute('aria-label',`${id}の予定`);inp.oninput=()=>{state.schedule[id]=inp.value;save()};
+   inp.type='text';inp.value=scheduleValue(id);inp.setAttribute('aria-label',`${id}の予定`);
+   let initial=inp.value,hadRepeats=false;
+   inp.addEventListener('focus',()=>{initial=inp.value;hadRepeats=repeatEvents(id).length>0});
+   inp.addEventListener('input',()=>{if(!hadRepeats){state.schedule[id]=inp.value;save()}});
+   inp.addEventListener('blur',()=>{if(hadRepeats&&inp.value!==initial){const before=splitEvents(initial),after=splitEvents(inp.value);const changed=before.find(x=>ruleFor(id,x)&&!after.includes(x));if(changed){const replacement=after.find(x=>!before.includes(x))||'';setTimeout(()=>confirmEdit(id,changed,replacement),0)}else{state.schedule[id]=inp.value;save()}}});
    inputEvents(inp);
-   entry.append(inp);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
+   const rep=h('button','repeat-button','↻');rep.type='button';rep.setAttribute('aria-label','繰り返し設定');rep.addEventListener('pointerdown',e=>e.preventDefault());rep.onclick=()=>{if(active)active.blur();repeatDialog(id)};
+   entry.append(inp,rep);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
   }
   sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){
@@ -263,7 +290,7 @@ restorePicker.addEventListener('change',async()=>{
     try{
      localStorage.setItem(storageKey,JSON.stringify(data.data));
      state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[]},data.data);
-     state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
+     state.repeatExceptions=state.repeatExceptions||{};state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
      if(active)active.blur();active=null;editing=false;current='ToDo';scrolls={};render(false);
      showDialog('復元完了','バックアップのデータを復元しました。',[{label:'閉じる',primary:true}]);
     }catch(e){showDialog('復元できませんでした','データを保存できませんでした。',[{label:'閉じる',primary:true}])}
