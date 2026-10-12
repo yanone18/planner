@@ -44,7 +44,7 @@ button,input,textarea{font:inherit}
 .entry input:not(:focus){-webkit-user-select:none;user-select:none}
 .entry input.longpress-pending{-webkit-user-select:none!important;user-select:none!important}
 .entry input:focus{-webkit-user-select:text;user-select:text}
-.entry input:focus,.taskrow input:focus{background:#f4f8ff}
+.entry input:focus,.taskrow input:focus{background:transparent}
 .task-day{padding:0 0 10px}
 .task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
 .taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:#fff;overflow:hidden;border-bottom:1px solid #f1f3f6}
@@ -53,7 +53,9 @@ button,input,textarea{font:inherit}
 .delete{display:none;position:absolute;z-index:1;right:0;top:0;bottom:0;width:64px;border:0;background:#b94350;color:#fff;font-size:14px;padding:0;min-height:0}
 .taskrow.swiped .delete{display:block}
 .addtask{width:100%;text-align:left;padding:6px 15px 6px 33px;border:0;background:#fff;color:#8793a3;font-size:14px}
-.memo{padding:12px 15px;background:#fff;height:100%;min-height:100%;display:flex;flex-direction:column}
+.memo{padding:12px 15px 25px;background:#fff;display:flex;flex-direction:column;min-height:320px;border-top:1px solid #dfe5ee}
+.memo-title{font-size:16px;font-weight:600;color:#526175;margin:0 0 10px}
+.memo textarea{min-height:260px!important;height:320px!important;flex:none!important;overflow:auto;scroll-margin-bottom:180px}
 .memo textarea{display:block;flex:1;width:100%;height:100%;min-height:0;resize:none;overflow:auto;border:0;outline:0;background:#fff;font:17px/1.7 -apple-system,BlinkMacSystemFont,sans-serif;color:#243247;caret-color:#315f97;touch-action:auto}
 .today{position:fixed;z-index:4;right:max(16px,calc((100vw - 650px)/2 + 16px));bottom:max(18px,env(safe-area-inset-bottom));border:0;border-radius:50%;width:46px;height:46px;background:#315f97;color:white;font-size:23px;box-shadow:0 3px 12px #263e6229}
 .hidden{display:none!important}
@@ -71,7 +73,7 @@ button,input,textarea{font:inherit}
 </head>
 <body>
 <div class="app">
-<header class="top"><div class="brand">PLANNER</div><nav class="tabs" id="tabs" aria-label="画面切り替え"></nav></header>
+<header class="top"><nav class="tabs" id="tabs" aria-label="画面切り替え"></nav></header>
 <div class="toolbar"><span id="status">予定表</span><button class="menu" id="menu" aria-label="メニュー">⋯</button></div>
 <main class="sheet" id="sheet"></main>
 </div>
@@ -88,9 +90,10 @@ const color=d=>d.getDay()===0?'sun':d.getDay()===6?'sat':'';
 const h=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el};
 const storageKey='planner-prototype-v1';
 let state;try{state=JSON.parse(localStorage.getItem(storageKey))}catch{}
-state=Object.assign({order:['予定表','ToDo','メモ'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[]},state||{});
+state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[]},state||{});
 if(!state.tasksByDate)state.tasksByDate={};
 if(!state.repeats)state.repeats=[];
+state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
 // Preserve the previous single ToDo list by moving it to today's list only once.
 if(Array.isArray(state.tasks)&&state.tasks.length){
  const k=iso(today());state.tasksByDate[k]=[...(state.tasksByDate[k]||[]),...state.tasks];state.tasks=[]; 
@@ -99,26 +102,43 @@ let current=state.order.includes('予定表')?'予定表':state.order[0],editing
 const save=()=>localStorage.setItem(storageKey,JSON.stringify(state));
 const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date(d);x.setDate(d.getDate()+i);arr.push(x)}return arr};
 const isRepeatMatch=(rule,d)=>{const start=new Date(rule.start+'T00:00:00');if(d<start)return false;if(rule.until&&iso(d)>rule.until)return false;if(rule.freq==='daily')return true;if(rule.freq==='weekly')return d.getDay()===start.getDay();if(rule.freq==='monthly')return d.getDate()===start.getDate();if(rule.freq==='yearly')return d.getMonth()===start.getMonth()&&d.getDate()===start.getDate();const interval=({months1:1,months3:3,months6:6})[rule.freq];if(interval){const monthDiff=(d.getFullYear()-start.getFullYear())*12+d.getMonth()-start.getMonth();return monthDiff>=0&&monthDiff%interval===0&&d.getDate()===start.getDate()}return false};
-const scheduleValue=(id,d)=>{if(state.schedule[id])return state.schedule[id];const rules=(state.repeats||[]).filter(r=>isRepeatMatch(r,d)).sort((a,b)=>b.start.localeCompare(a.start));return rules.length?rules[0].text:''};
+ const splitEvents=text=>{
+  const parts=[];let current='';
+  const segments=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter('ja',{granularity:'grapheme'}).segment(text)].map(x=>x.segment):Array.from(text);
+  const isEmoji=x=>/\p{Extended_Pictographic}|[0-9#*]\uFE0F?\u20E3/u.test(x);
+  for(const piece of segments){if(isEmoji(piece)&&current.trim()){parts.push(current.trim());current=piece}else current+=piece}
+  if(current.trim())parts.push(current.trim());return parts;
+ };
+ const scheduleValue=(id,d)=>{
+  const own=state.schedule[id]||'';
+  const existing=new Set(splitEvents(own));
+  const rules=(state.repeats||[]).filter(r=>isRepeatMatch(r,d)&&r.start!==id).sort((a,b)=>a.start.localeCompare(b.start));
+  const extras=[];for(const rule of rules){if(!existing.has(rule.text)&&!extras.includes(rule.text))extras.push(rule.text)}
+  return [own,...extras].filter(Boolean).join('');
+ };
 const setEditing=(el)=>{editing=true;active=el;el.dataset.editing='1';};
 const finish=()=>{if(active)active.blur();editing=false;active=null;$('sheet').querySelectorAll('[data-editing]').forEach(e=>delete e.dataset.editing);render(false)};
 const inputEvents=(el,opts={})=>{
  el.addEventListener('focus',()=>setEditing(el));
  el.addEventListener('blur',()=>{if(active===el){editing=false;active=null;}});
- el.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&current!=='メモ'){e.preventDefault();if(opts.onEnter)opts.onEnter();else finish()}});
+ el.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&el.tagName!=='TEXTAREA'){e.preventDefault();if(opts.onEnter)opts.onEnter();else finish()}});
 };
 const showDialog=(title,desc,buttons)=>{const back=h('div','dialog-backdrop'),box=h('div','dialog');box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.append(h('h2','',title),h('p','',desc));const actions=h('div','dialog-actions');buttons.forEach(b=>{const btn=h('button',b.primary?'primary':'',b.label);btn.onclick=()=>{back.remove();b.action&&b.action()};actions.append(btn)});box.append(actions);back.append(box);document.body.append(back)};
-const repeatDialog=(id,d,text)=>{if(!text.trim()){showDialog('繰り返し設定','先にこの日の予定を入力してください。',[{label:'閉じる',primary:true}]);return}
- showDialog('繰り返し設定',`${label(d)}「${text}」
-繰り返す頻度を選んでください`,[
- {label:'1カ月',action:()=>addRepeat(id,text,'months1')},
- {label:'3カ月',action:()=>addRepeat(id,text,'months3')},
- {label:'6カ月',action:()=>addRepeat(id,text,'months6')},
- {label:'1年',action:()=>addRepeat(id,text,'yearly')},
- {label:'解除',action:()=>{state.repeats=state.repeats.filter(r=>r.start!==id);save();render(false)}},
- {label:'キャンセル'}
- ])};
-const addRepeat=(id,text,freq)=>{state.repeats=state.repeats.filter(r=>r.start!==id);state.repeats.push({start:id,text,freq});save();render(false)};
+ const repeatDialog=(id,d,text)=>{
+  const items=splitEvents(text);
+  if(!items.length){showDialog('繰り返し設定','先にこの日の予定を入力してください。',[{label:'閉じる',primary:true}]);return}
+  const choose=selected=>showDialog('繰り返し設定',`${label(d)}「${selected}」の繰り返し頻度を選んでください`,[
+   {label:'1カ月',action:()=>addRepeat(id,selected,'months1')},
+   {label:'3カ月',action:()=>addRepeat(id,selected,'months3')},
+   {label:'6カ月',action:()=>addRepeat(id,selected,'months6')},
+   {label:'1年',action:()=>addRepeat(id,selected,'yearly')},
+   {label:'解除',action:()=>{state.repeats=state.repeats.filter(r=>!(r.start===id&&r.text===selected));save();render(true)}},
+   {label:'キャンセル'}]);
+  if(items.length===1){choose(items[0]);return}
+  showDialog('予定を選択',`${label(d)} 繰り返し設定する予定を選んでください`,[
+   ...items.map(item=>({label:item,action:()=>choose(item)})),{label:'キャンセル'}]);
+ };
+ const addRepeat=(id,text,freq)=>{state.repeats=state.repeats.filter(r=>!(r.start===id&&r.text===text));state.repeats.push({start:id,text,freq});save();render(true)};
 let reorderSource=null,reorderTarget=null,reorderTimer=null,reorderTriggered=false;
 const paintTabReorder=()=>{$('tabs').querySelectorAll('.tab').forEach(b=>{b.classList.toggle('reorder-source',b.textContent===reorderSource);b.classList.toggle('reorder-target',!!reorderSource&&b.textContent===reorderTarget&&b.textContent!==reorderSource)})};
 const finishTabReorder=()=>{if(reorderSource&&reorderTarget&&reorderSource!==reorderTarget){const from=state.order.indexOf(reorderSource);if(from!==-1){state.order.splice(from,1);const to=state.order.indexOf(reorderTarget);state.order.splice(to,0,reorderSource);save()}}reorderSource=null;reorderTarget=null;$('status').textContent=current;tabs()};
@@ -154,14 +174,17 @@ const render=restore=>{
    const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
    tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};row.append(inp,del);group.append(row)});
    const add=h('button','addtask','＋ ToDoを追加');add.onclick=()=>{state.tasksByDate[id].push('');save();render(false);const groups=sheet.querySelectorAll('.task-day'),gi=get8Days().findIndex(x=>iso(x)===id),last=groups[gi]?.querySelectorAll('input');const target=last?.[last.length-1];if(target){target.focus();target.scrollIntoView({block:'nearest'})}};group.append(add);sheet.append(group);
-  });sheet.onscroll=null;
- }else{
-  const box=h('div','memo'),area=h('textarea');area.value=state.memo;area.placeholder='ここにメモを入力';area.oninput=()=>{state.memo=area.value;save()};inputEvents(area);box.append(area);sheet.append(box);sheet.onscroll=null;
+  });
+  const box=h('section','memo'),heading=h('h2','memo-title','メモ'),area=h('textarea');
+  area.value=state.memo;area.placeholder='ここにメモを入力';area.setAttribute('aria-label','メモ');
+  area.oninput=()=>{state.memo=area.value;save()};inputEvents(area);
+  box.append(heading,area);sheet.append(box);sheet.onscroll=null;
  }
+
  if(restore)sheet.scrollTop=scrolls[current]||0;else sheet.scrollTop=0;
  if(!restore){sheet.classList.add(transitionDirection>0?'transition-in-right':'transition-in-left')}
 };
-$('menu').onclick=()=>{if(editing)return;if(current==='ToDo')showDialog('ToDo','削除したい項目を左にスワイプして「削除」を押してね。',[{label:'閉じる',primary:true}]);else if(current==='予定表')showDialog('予定表','入力を終了した予定を長押しすると、繰り返し設定を開けます。',[{label:'閉じる',primary:true}]);else showDialog('メモ','入力した内容は自動保存されるよ。',[{label:'閉じる',primary:true}])};
+$('menu').onclick=()=>{if(editing)return;if(current==='ToDo')showDialog('ToDo','削除したい項目を左にスワイプして「削除」を押してね。',[{label:'閉じる',primary:true}]);else if(current==='予定表')showDialog('予定表','入力を終了した予定を長押しすると、繰り返し設定を開けます。',[{label:'閉じる',primary:true}]);};
 $('today').onclick=()=>{$('sheet').scrollTo({top:0,behavior:'smooth'})};
 // 画面切り替えは上部タブのタップのみ。横スワイプは各項目の操作に使う。
 save();render(false);
