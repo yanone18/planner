@@ -306,7 +306,28 @@ $('menu').onclick=()=>{
  ]);
 };
 $('today').onclick=()=>{$('sheet').scrollTo({top:0,behavior:'smooth'})};
-// 画面切り替えは上部タブのタップのみ。横スワイプは各項目の操作に使う。
+// 通常時のみ左右スワイプでタブ切替。入力中とToDo項目の削除操作には干渉しない。
+let pageSwipe=null;
+$('sheet').addEventListener('touchstart',e=>{
+ pageSwipe=null;
+ if(e.touches.length!==1||editing||document.querySelector('.dialog-backdrop')||todoDrag)return;
+ if(e.target.closest('.taskrow,.drag-handle,.delete,button'))return;
+ const t=e.touches[0];pageSwipe={x:t.clientX,y:t.clientY,time:Date.now(),cancelled:false};
+},{passive:true});
+$('sheet').addEventListener('touchmove',e=>{
+ if(!pageSwipe||e.touches.length!==1)return;
+ const t=e.touches[0],dx=t.clientX-pageSwipe.x,dy=t.clientY-pageSwipe.y;
+ if(Math.abs(dy)>18&&Math.abs(dy)>Math.abs(dx))pageSwipe.cancelled=true;
+},{passive:true});
+$('sheet').addEventListener('touchend',e=>{
+ const gesture=pageSwipe;pageSwipe=null;
+ if(!gesture||gesture.cancelled||editing||e.changedTouches.length!==1||document.querySelector('.dialog-backdrop'))return;
+ const t=e.changedTouches[0],dx=t.clientX-gesture.x,dy=t.clientY-gesture.y;
+ if(Math.abs(dx)<75||Math.abs(dx)<Math.abs(dy)*1.8||Date.now()-gesture.time>900)return;
+ const next=state.order.indexOf(current)+(dx<0?1:-1);
+ if(next>=0&&next<state.order.length)switchTo(state.order[next]);
+},{passive:true});
+$('sheet').addEventListener('touchcancel',()=>{pageSwipe=null},{passive:true});
 save();render(false);
 if('serviceWorker' in navigator && location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 })();
