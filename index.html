@@ -196,7 +196,7 @@ const endTodoDrag=(commit)=>{
  if(commit&&drag.target){
   const from=state.tasksByDate[drag.date]||[],to=state.tasksByDate[drag.target.date]||(state.tasksByDate[drag.target.date]=[]);
   const [item]=from.splice(drag.index,1);
-  if(item!==undefined){let at=drag.target.index;to.splice(Math.max(0,at),0,item);save();scrolls.ToDo=$('sheet').scrollTop;render(true)}
+  if(item!==undefined){let at=drag.target.index;to.splice(Math.max(0,at),0,item);save();const y=$('sheet').scrollTop;scrolls.ToDo=y;render(true);$('sheet').scrollTop=y}
  }
 };
 const startTodoDrag=(e,row,date,index,handle)=>{
@@ -233,7 +233,8 @@ const render=restore=>{
    const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
    tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};const handle=h('button','drag-handle','⠿');handle.type='button';handle.setAttribute('aria-label','ドラッグしてToDoを移動');
     handle.addEventListener('pointerdown',e=>startTodoDrag(e,row,id,i,handle));
-    handle.addEventListener('pointermove',e=>{if(todoDrag){e.preventDefault();const d=todoDrag;if(!d.moved){if(Math.hypot(e.clientX-d.startX,e.clientY-d.startY)<7)return;d.moved=true;const position=$('sheet').scrollTop;if(active)active.blur();editing=false;active=null;$('sheet').scrollTop=position;requestAnimationFrame(()=>{if(todoDrag==d&&Math.abs($('sheet').scrollTop-position)>2)$('sheet').scrollTop=position});}d.lastX=e.clientX;d.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY)}});
+    handle.addEventListener('pointermove',e=>{if(todoDrag){e.preventDefault();const d=todoDrag;if(!d.moved){if(Math.hypot(e.clientX-d.startX,e.clientY-d.startY)<7)return;d.moved=true; // Keep the focused input and keyboard unchanged while dragging; blurring jumps the iOS viewport.
+}d.lastX=e.clientX;d.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY)}});
     handle.addEventListener('pointerup',e=>{if(todoDrag){e.preventDefault();endTodoDrag(todoDrag.moved)}});
     handle.addEventListener('pointercancel',()=>endTodoDrag(false));
     handle.addEventListener('lostpointercapture',()=>{if(todoDrag)endTodoDrag(false)});
