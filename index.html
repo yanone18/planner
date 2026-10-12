@@ -39,7 +39,7 @@ button,input,textarea{font:inherit}
 .month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:16px;font-weight:500}
 .date.sat,.task-date.sat{color:#1769bd}
 .date.sun,.task-date.sun{color:#c03d4a}
-.entry{flex:1;min-width:0;display:flex;align-items:center;padding:1px 4px 1px 2px}
+.entry{flex:1;min-width:0;display:flex;align-items:center;padding:1px 9px 1px 2px}
 .entry input,.taskrow input{width:100%;min-width:0;background:transparent;border:0;outline:0;font-size:17px;color:#243247;padding:5px 2px;border-radius:0}
 .entry input:not(:focus){-webkit-user-select:none;user-select:none}
 .entry input:focus{-webkit-user-select:text;user-select:text}
@@ -145,6 +145,21 @@ const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date
  };
  const askRemove=r=>showDialog('繰り返し解除','自動生成された予定をどうしますか？',[{label:'予定も削除',action:()=>removeRule(r,false)},{label:'予定を残す',action:()=>removeRule(r,true)},{label:'キャンセル'}]);
  const removeRule=(r,keep)=>{if(keep){const a=new Date(r.start+'T12:00:00');for(let n=0;n<=72;n+=intervalOf(r.freq)){const id=addMonths(r.start,n);const d=new Date(id+'T12:00:00');if(d>new Date(today().getFullYear()+5,today().getMonth(),today().getDate()))break;if(id===r.start)continue;const v=state.repeatExceptions[`${r.uid}|${id}`]??r.text;if(v)state.schedule[id]=(state.schedule[id]||'')+v;}}state.repeats=state.repeats.filter(x=>x!==r);Object.keys(state.repeatExceptions).filter(k=>k.startsWith(r.uid+'|')).forEach(k=>delete state.repeatExceptions[k]);save();render(true);};
+ // Bulk delete only manually stored entries; generated repeat occurrences are untouched.
+ const bulkDeleteDialog=()=>{
+  const back=h('div','dialog-backdrop'),panel=h('div','dialog');
+  panel.append(h('h2','','予定の一括削除'),h('p','','同じ名前の予定を検索します。繰り返し設定で自動表示される予定は削除しません。'));
+  const field=h('input');field.type='text';field.placeholder='例：IIJmio';field.setAttribute('aria-label','削除する予定名');field.style.cssText='width:100%;padding:11px;border:1px solid #d9e0e8;border-radius:9px;font:inherit';panel.append(field);
+  const scope=h('select');scope.style.cssText='width:100%;margin-top:10px;padding:11px;border:1px solid #d9e0e8;border-radius:9px;background:white;font:inherit';
+  [['future','今日以降'],['all','すべての日付']].forEach(([v,t])=>{const opt=h('option','',t);opt.value=v;scope.append(opt)});panel.append(scope);
+  const info=h('p','','予定名を入力してください。');panel.append(info);
+  const actions=h('div','dialog-actions'),cancel=h('button','','キャンセル'),del=h('button','primary','削除する');del.style.background='#b94350';del.style.borderColor='#b94350';del.disabled=true;
+  const findMatches=()=>{const name=field.value.trim(),min=iso(today());if(!name)return [];return Object.entries(state.schedule).filter(([date,value])=>(scope.value==='all'||date>=min)&&splitEvents(value).includes(name)).map(([date,value])=>({date,value}));};
+  const refresh=()=>{const matches=findMatches();info.textContent=field.value.trim()?`削除対象：${matches.length}日分（保存済みの普通の予定のみ）`:'予定名を入力してください。';del.disabled=!matches.length};
+  field.addEventListener('input',refresh);scope.addEventListener('change',refresh);
+  cancel.onclick=()=>back.remove();del.onclick=()=>{const name=field.value.trim(),matches=findMatches();if(!name||!matches.length)return;back.remove();showDialog('一括削除の確認',`「${name}」を${matches.length}日分の保存済み予定から削除します。現在の繰り返し設定は変更しません。この操作は元に戻せません。`,[{label:'キャンセル'},{label:'削除する',primary:true,action:()=>{for(const {date} of matches){const parts=splitEvents(state.schedule[date]||'');const at=parts.indexOf(name);if(at>=0){parts.splice(at,1);if(parts.length)state.schedule[date]=parts.join('');else delete state.schedule[date];}}save();render(true);showDialog('削除完了',`${matches.length}日分の予定を削除しました。`,[{label:'閉じる',primary:true}]);}}]);};
+  actions.append(cancel,del);panel.append(actions);back.append(panel);document.body.append(back);
+ };
 const setEditing=(el)=>{editing=true;active=el;el.dataset.editing='1';};
 const finish=()=>{if(active)active.blur();editing=false;active=null;$('sheet').querySelectorAll('[data-editing]').forEach(e=>delete e.dataset.editing);render(false)};
 const inputEvents=(el,opts={})=>{
@@ -302,6 +317,7 @@ $('menu').onclick=()=>{
  showDialog('メニュー','予定・ToDo・メモなどのデータを保存・復元できます。',[
   {label:'バックアップを保存',action:backupNow},
   {label:'バックアップから復元',action:()=>restorePicker.click()},
+   {label:'予定の一括削除',action:bulkDeleteDialog},
   {label:'閉じる'}
  ]);
 };
