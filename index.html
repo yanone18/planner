@@ -47,6 +47,8 @@ button,input,textarea{font:inherit}
 .entry input:focus,.taskrow input:focus{background:transparent}
 .task-day{margin:8px 10px 12px;padding:0 0 7px;border-radius:10px;background:#f7f9fc;overflow:visible}
 .task-day.rest{background:#fff9df}
+.task-date > span:first-child{display:inline-flex;align-items:center;gap:9px}
+.task-date > span:first-child::before{content:"";display:inline-block;width:7px;height:7px;flex:none;background:currentColor;transform:rotate(45deg);border-radius:1px}
 .task-date{position:relative;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:400;background:transparent;color:#526175;border-bottom:1px solid #edf0f4}
 .taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:transparent;overflow:hidden;border-bottom:1px solid #f1f3f6}
 .taskrow input{flex:1;transition:transform .18s ease}
@@ -110,7 +112,7 @@ state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定
 if(Array.isArray(state.tasks)&&state.tasks.length){
  const k=iso(today());state.tasksByDate[k]=[...(state.tasksByDate[k]||[]),...state.tasks];state.tasks=[]; 
 }
-let current=state.order.includes('予定表')?'予定表':state.order[0],editing=false,active=null,scrolls={},transitionDirection=1;
+let current=state.order.includes('ToDo')?'ToDo':state.order[0],editing=false,active=null,scrolls={},transitionDirection=1;
 const save=()=>localStorage.setItem(storageKey,JSON.stringify(state));
 const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date(d);x.setDate(d.getDate()+i);arr.push(x)}return arr};
 const isRepeatMatch=(rule,d)=>{const start=new Date(rule.start+'T00:00:00');if(d<start)return false;if(rule.until&&iso(d)>rule.until)return false;if(rule.freq==='daily')return true;if(rule.freq==='weekly')return d.getDay()===start.getDay();if(rule.freq==='monthly')return d.getDate()===start.getDate();if(rule.freq==='yearly')return d.getMonth()===start.getMonth()&&d.getDate()===start.getDate();const interval=({months1:1,months3:3,months6:6})[rule.freq];if(interval){const monthDiff=(d.getFullYear()-start.getFullYear())*12+d.getMonth()-start.getMonth();return monthDiff>=0&&monthDiff%interval===0&&d.getDate()===start.getDate()}return false};
@@ -289,7 +291,7 @@ restorePicker.addEventListener('change',async()=>{
      localStorage.setItem(storageKey,JSON.stringify(data.data));
      state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[]},data.data);
      state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
-     if(active)active.blur();active=null;editing=false;current='予定表';scrolls={};render(false);
+     if(active)active.blur();active=null;editing=false;current='ToDo';scrolls={};render(false);
      showDialog('復元完了','バックアップのデータを復元しました。',[{label:'閉じる',primary:true}]);
     }catch(e){showDialog('復元できませんでした','データを保存できませんでした。',[{label:'閉じる',primary:true}])}
    }}]);
