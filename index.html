@@ -116,6 +116,20 @@ if(Array.isArray(state.tasks)&&state.tasks.length){
 }
 let current=state.order.includes('ToDo')?'ToDo':state.order[0],editing=false,active=null,scrolls={},transitionDirection=1;
 const save=()=>localStorage.setItem(storageKey,JSON.stringify(state));
+// Move unfinished ToDos from all past dates to the beginning of today, once.
+const carryOverTodos=()=>{
+ const key=iso(today());
+ const oldDates=Object.keys(state.tasksByDate).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)&&k<key).sort();
+ if(!oldDates.length)return;
+ const moved=[];
+ for(const day of oldDates){
+  const items=state.tasksByDate[day];
+  if(Array.isArray(items))moved.push(...items.filter(v=>typeof v==='string'&&v.trim()!==''));
+  delete state.tasksByDate[day];
+ }
+ state.tasksByDate[key]=[...moved,...(state.tasksByDate[key]||[])];
+ save();
+};
 const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date(d);x.setDate(d.getDate()+i);arr.push(x)}return arr};
  const splitEvents=text=>{
   const parts=[];let current='';
@@ -229,6 +243,7 @@ const startTodoDrag=(e,row,date,index,handle)=>{
  todoDrag.lastX=e.clientX;todoDrag.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY);todoDrag.frame=requestAnimationFrame(autoScrollDrag);
 };
 const render=restore=>{
+ carryOverTodos();
  tabs();const sheet=$('sheet');sheet.replaceChildren();sheet.classList.remove('transition-in-left','transition-in-right');
  $('status').textContent=current;$('today').classList.add('hidden');
  if(current==='予定表'){
