@@ -164,8 +164,7 @@ let todoDrag=null;
 const clearDropMarks=()=>{$('sheet').querySelectorAll('.drop-before,.drop-after,.drop-empty').forEach(el=>el.classList.remove('drop-before','drop-after','drop-empty'))};
 const dragTargetAt=(x,y)=>{
  const sheet=$('sheet'),bounds=sheet.getBoundingClientRect();
- const edges=dragVisibleEdges();
- const safeY=Math.max(edges.top+4,Math.min(edges.bottom-4,y));
+ const safeY=Math.max(bounds.top+4,Math.min(bounds.bottom-4,y));
  const element=document.elementFromPoint(x,safeY);
  const group=element?.closest('.task-day');
  if(!group)return null;
@@ -174,35 +173,21 @@ const dragTargetAt=(x,y)=>{
  for(let i=0;i<rows.length;i++){if(safeY<rows[i].getBoundingClientRect().top+rows[i].offsetHeight/2){index=i;break}}
  return {date:group.dataset.date,index,rows,group};
 };
-// Keep edge-scrolling within the visible portion of the sheet (including iOS keyboard).
-const dragVisibleEdges=()=>{
- const bounds=$('sheet').getBoundingClientRect();
- const vv=window.visualViewport;
- const visibleTop=vv?vv.offsetTop:0;
- const visibleBottom=vv?vv.offsetTop+vv.height:window.innerHeight;
- return {top:Math.max(bounds.top,visibleTop),bottom:Math.min(bounds.bottom,visibleBottom)};
-};
 const updateTodoDrag=(x,y)=>{
  if(!todoDrag)return;
- const d=todoDrag,edges=dragVisibleEdges();
- d.lastX=x;d.lastY=y;
- d.ghost.style.top=Math.max(edges.top,Math.min(edges.bottom-38,y-18))+'px';
- d.ghost.style.left=Math.max(8,Math.min(window.innerWidth-90,x+12))+'px';
- clearDropMarks();d.target=dragTargetAt(x,y);
- if(d.target){const t=d.target;if(!t.rows.length)t.group.classList.add('drop-empty');else if(t.index<t.rows.length)t.rows[t.index].classList.add('drop-before');else t.rows[t.rows.length-1].classList.add('drop-after')}
+ const sheet=$('sheet'),bounds=sheet.getBoundingClientRect();
+ if(y<bounds.top+48)sheet.scrollTop-=Math.max(7,Math.min(22,(bounds.top+48-y)*.35));
+ else if(y>bounds.bottom-48)sheet.scrollTop+=Math.max(7,Math.min(22,(y-(bounds.bottom-48))*.35));
+ todoDrag.ghost.style.top=Math.max(bounds.top,Math.min(bounds.bottom-38,y-18))+'px';
+ todoDrag.ghost.style.left=Math.max(8,Math.min(window.innerWidth-90,x+12))+'px';
+ clearDropMarks();todoDrag.target=dragTargetAt(x,y);
+ if(todoDrag.target){const t=todoDrag.target;if(!t.rows.length)t.group.classList.add('drop-empty');else if(t.index<t.rows.length)t.rows[t.index].classList.add('drop-before');else t.rows[t.rows.length-1].classList.add('drop-after')}
 };
 const autoScrollDrag=()=>{
- const d=todoDrag;if(!d)return;
- if(d.moved&&d.lastY!==undefined){
-  const sheet=$('sheet'),edges=dragVisibleEdges(),zone=65;
-  let speed=0;
-  if(d.lastY<edges.top+zone)speed=-Math.min(24,Math.max(4,(edges.top+zone-d.lastY)*.30));
-  else if(d.lastY>edges.bottom-zone)speed=Math.min(24,Math.max(4,(d.lastY-(edges.bottom-zone))*.30));
-  if(speed){const previous=sheet.scrollTop;sheet.scrollTop+=speed;
-   if(sheet.scrollTop!==previous)updateTodoDrag(d.lastX,d.lastY);
-  }
- }
- if(todoDrag===d)d.frame=requestAnimationFrame(autoScrollDrag);
+ if(!todoDrag)return;
+ const d=todoDrag;
+ if(d.lastX!==undefined)updateTodoDrag(d.lastX,d.lastY);
+ if(todoDrag)todoDrag.frame=requestAnimationFrame(autoScrollDrag);
 };
 const endTodoDrag=(commit)=>{
  if(!todoDrag)return;
@@ -211,18 +196,17 @@ const endTodoDrag=(commit)=>{
  if(commit&&drag.target){
   const from=state.tasksByDate[drag.date]||[],to=state.tasksByDate[drag.target.date]||(state.tasksByDate[drag.target.date]=[]);
   const [item]=from.splice(drag.index,1);
-  if(item!==undefined){let at=drag.target.index;to.splice(Math.max(0,at),0,item);save();const y=$('sheet').scrollTop;scrolls.ToDo=y;render(true);$('sheet').scrollTop=y}
+  if(item!==undefined){let at=drag.target.index;to.splice(Math.max(0,at),0,item);save();scrolls.ToDo=$('sheet').scrollTop;render(true)}
  }
 };
 const startTodoDrag=(e,row,date,index,handle)=>{
  if(e.button!==undefined&&e.button!==0)return;
  e.preventDefault();e.stopPropagation();
- const originalScroll=$('sheet').scrollTop;
- // Do not dismiss the keyboard or alter the scroll position until an actual drag begins.
+ if(active)active.blur();editing=false;active=null;
  const ghost=h('div','drag-ghost',state.tasksByDate[date][index]||'（空欄）');document.body.append(ghost);
- todoDrag={row,date,index,ghost,target:null,moved:false,startX:e.clientX,startY:e.clientY,originalScroll};row.classList.add('drag-source');$('sheet').classList.add('dragging-todo');
+ todoDrag={row,date,index,ghost,target:null};row.classList.add('drag-source');$('sheet').classList.add('dragging-todo');
  try{handle.setPointerCapture(e.pointerId)}catch{}
- todoDrag.lastX=e.clientX;todoDrag.lastY=e.clientY;todoDrag.ghost.style.top=(e.clientY-18)+'px';todoDrag.ghost.style.left=(e.clientX+12)+'px';todoDrag.frame=requestAnimationFrame(autoScrollDrag);
+ todoDrag.lastX=e.clientX;todoDrag.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY);todoDrag.frame=requestAnimationFrame(autoScrollDrag);
 };
 const render=restore=>{
  tabs();const sheet=$('sheet');sheet.replaceChildren();sheet.classList.remove('transition-in-left','transition-in-right');
@@ -248,9 +232,8 @@ const render=restore=>{
    const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
    tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};const handle=h('button','drag-handle','⠿');handle.type='button';handle.setAttribute('aria-label','ドラッグしてToDoを移動');
     handle.addEventListener('pointerdown',e=>startTodoDrag(e,row,id,i,handle));
-    handle.addEventListener('pointermove',e=>{if(todoDrag){e.preventDefault();const d=todoDrag;if(!d.moved){if(Math.hypot(e.clientX-d.startX,e.clientY-d.startY)<7)return;d.moved=true; // Keep the focused input and keyboard unchanged while dragging; blurring jumps the iOS viewport.
-}d.lastX=e.clientX;d.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY)}});
-    handle.addEventListener('pointerup',e=>{if(todoDrag){e.preventDefault();endTodoDrag(todoDrag.moved)}});
+    handle.addEventListener('pointermove',e=>{if(todoDrag){e.preventDefault();todoDrag.lastX=e.clientX;todoDrag.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY)}});
+    handle.addEventListener('pointerup',e=>{if(todoDrag){e.preventDefault();endTodoDrag(true)}});
     handle.addEventListener('pointercancel',()=>endTodoDrag(false));
     handle.addEventListener('lostpointercapture',()=>{if(todoDrag)endTodoDrag(false)});
     row.append(inp,del,handle);group.append(row)});
