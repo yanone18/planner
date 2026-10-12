@@ -34,7 +34,7 @@ button,input,textarea{font:inherit}
 @keyframes slideFromRight{from{transform:translateX(28px);opacity:.65}to{transform:translateX(0);opacity:1}}
 @keyframes slideFromLeft{from{transform:translateX(-28px);opacity:.65}to{transform:translateX(0);opacity:1}}
 .dayrow{min-height:38px;display:flex;align-items:stretch;background:#fff;border-bottom:1px solid #edf0f4}
-.dayrow.rest,.task-date.rest{background:#fff9df}
+.dayrow.rest{background:#fff9df}
 .date{width:76px;flex:0 0 76px;display:flex;align-items:center;justify-content:flex-end;padding:0 4px 0 10px;text-align:right;font-size:16px;white-space:nowrap;user-select:none;color:#526175;border:0}
 .month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:16px;font-weight:500}
 .date.sat,.task-date.sat{color:#1769bd}
@@ -45,12 +45,13 @@ button,input,textarea{font:inherit}
 .entry input.longpress-pending{-webkit-user-select:none!important;user-select:none!important}
 .entry input:focus{-webkit-user-select:text;user-select:text}
 .entry input:focus,.taskrow input:focus{background:transparent}
-.task-day{padding:0 0 10px}
-.task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:400;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
-.taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:#fff;overflow:hidden;border-bottom:1px solid #f1f3f6}
+.task-day{margin:8px 10px 12px;padding:0 0 7px;border-radius:10px;background:#f7f9fc;overflow:visible}
+.task-day.rest{background:#fff9df}
+.task-date{position:relative;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:400;background:transparent;color:#526175;border-bottom:1px solid #edf0f4}
+.taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:transparent;overflow:hidden;border-bottom:1px solid #f1f3f6}
 .taskrow input{flex:1;transition:transform .18s ease}
 .taskrow:focus-within{padding-right:36px}
-.drag-handle{display:none;position:absolute;right:0;top:0;bottom:0;width:36px;border:0;background:#fff;color:#637b99;font-size:23px;align-items:center;justify-content:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab;z-index:2}
+.drag-handle{display:none;position:absolute;right:0;top:0;bottom:0;width:36px;border:0;background:transparent;color:#637b99;font-size:23px;align-items:center;justify-content:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab;z-index:2}
 .taskrow:focus-within .drag-handle,.taskrow.drag-source .drag-handle{display:flex}
 .taskrow.drag-source{opacity:.32}
 .taskrow.drag-source input{pointer-events:none}
@@ -230,7 +231,7 @@ const render=restore=>{
   sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){
   get8Days().forEach(d=>{
-   const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d));head.classList.toggle('rest',!!state.rest[id]);group.dataset.date=id;head.append(h('span','',label(d)));group.append(head);
+   const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d));group.classList.toggle('rest',!!state.rest[id]);head.classList.toggle('rest',!!state.rest[id]);group.dataset.date=id;head.append(h('span','',label(d)));group.append(head);
    const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
    tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};const handle=h('button','drag-handle','⠿');handle.type='button';handle.setAttribute('aria-label','ドラッグしてToDoを移動');
     handle.addEventListener('pointerdown',e=>startTodoDrag(e,row,id,i,handle));
