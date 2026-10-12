@@ -41,6 +41,11 @@ button,input,textarea{font:inherit}
 .date.sun,.task-date.sun{color:#c03d4a}
 .entry{flex:1;min-width:0;display:flex;align-items:center;padding:1px 4px 1px 2px}
 .entry input,.taskrow input{width:100%;min-width:0;background:transparent;border:0;outline:0;font-size:17px;color:#243247;padding:5px 2px;border-radius:0}
+.entry.swipe-open input{transform:translateX(-92px);pointer-events:none}
+.entry{position:relative;overflow:hidden}
+.repeat-action{position:absolute;right:0;top:0;bottom:0;width:90px;border:0;background:#315f97;color:#fff;font-size:12px;display:none}
+.entry.swipe-open .repeat-action{display:block}
+.entry input{position:relative;z-index:1;transition:transform .16s ease}
 .entry input:not(:focus){-webkit-user-select:none;user-select:none}
 .entry input.longpress-pending{-webkit-user-select:none!important;user-select:none!important}
 .entry input:focus{-webkit-user-select:text;user-select:text}
@@ -115,7 +120,12 @@ if(Array.isArray(state.tasks)&&state.tasks.length){
 let current=state.order.includes('ToDo')?'ToDo':state.order[0],editing=false,active=null,scrolls={},transitionDirection=1;
 const save=()=>localStorage.setItem(storageKey,JSON.stringify(state));
 const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date(d);x.setDate(d.getDate()+i);arr.push(x)}return arr};
-const isRepeatMatch=(rule,d)=>{const start=new Date(rule.start+'T00:00:00');if(d<start)return false;if(rule.until&&iso(d)>rule.until)return false;if(rule.freq==='daily')return true;if(rule.freq==='weekly')return d.getDay()===start.getDay();if(rule.freq==='monthly')return d.getDate()===start.getDate();if(rule.freq==='yearly')return d.getMonth()===start.getMonth()&&d.getDate()===start.getDate();const interval=({months1:1,months3:3,months6:6})[rule.freq];if(interval){const monthDiff=(d.getFullYear()-start.getFullYear())*12+d.getMonth()-start.getMonth();return monthDiff>=0&&monthDiff%interval===0&&d.getDate()===start.getDate()}return false};
+const repeatMonths={monthly:1,months1:1,months3:3,months6:6,yearly:12};
+const isRepeatMatch=(rule,d)=>{const start=new Date(rule.start+'T00:00:00');if(d<start)return false;if(rule.until&&iso(d)>rule.until)return false;const n=repeatMonths[rule.freq];if(!n)return false;const diff=(d.getFullYear()-start.getFullYear())*12+d.getMonth()-start.getMonth();if(diff<0||diff%n)return false;const last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();return d.getDate()===Math.min(start.getDate(),last)};
+const repeatKey=(r)=>r.id||`${r.start}|${r.text}`;
+const occurrenceKey=(r,id)=>repeatKey(r)+'@'+id;
+if(!state.repeatOverrides)state.repeatOverrides={};
+const ruleOccurrences=(id,d)=>state.repeats.filter(r=>r.start!==id&&isRepeatMatch(r,d)&&!state.repeatOverrides[occurrenceKey(r,id)]?.deleted);
  const splitEvents=text=>{
   const parts=[];let current='';
   const segments=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter('ja',{granularity:'grapheme'}).segment(text)].map(x=>x.segment):Array.from(text);
@@ -124,11 +134,25 @@ const isRepeatMatch=(rule,d)=>{const start=new Date(rule.start+'T00:00:00');if(d
   if(current.trim())parts.push(current.trim());return parts;
  };
  const scheduleValue=(id,d)=>{
-  const own=state.schedule[id]||'';
-  const existing=new Set(splitEvents(own));
-  const rules=(state.repeats||[]).filter(r=>isRepeatMatch(r,d)&&r.start!==id).sort((a,b)=>a.start.localeCompare(b.start));
-  const extras=[];for(const rule of rules){if(!existing.has(rule.text)&&!extras.includes(rule.text))extras.push(rule.text)}
-  return [own,...extras].filter(Boolean).join('');
+  const own=state.schedule[id]||'';const existing=new Set(splitEvents(own));
+  const extras=[];for(const rule of ruleOccurrences(id,d)){
+   const override=state.repeatOverrides[occurrenceKey(rule,id)];const value=override?.text??rule.text;
+   if(value&&!existing.has(value)&&!extras.includes(value))extras.push(value);
+  }return [own,...extras].filter(Boolean).join('');
+ };
+ const saveScheduleEdit=(id,d,value)=>{
+  const rules=ruleOccurrences(id,d);const oldOwn=state.schedule[id]||'';
+  // Match unchanged generated entries to the new text; changes to a generated entry are local overrides.
+  const before=splitEvents(scheduleValue(id,d));const after=splitEvents(value);
+  const oldOwnParts=splitEvents(oldOwn);const used=new Set();
+  for(const rule of rules){const key=occurrenceKey(rule,id);const previous=state.repeatOverrides[key]?.text??rule.text;
+   const oldIndex=before.findIndex((x,i)=>!used.has(i)&&x===previous);if(oldIndex<0)continue;used.add(oldIndex);
+   const next=after[oldIndex];if(next===previous)continue;
+   state.repeatOverrides[key]=next?{text:next}:{deleted:true};
+  }
+  const generated=new Set(rules.map(r=>state.repeatOverrides[occurrenceKey(r,id)]?.text??r.text));
+  const ownParts=after.filter(x=>!generated.has(x));
+  state.schedule[id]=ownParts.join('');save();
  };
 const setEditing=(el)=>{editing=true;active=el;el.dataset.editing='1';};
 const finish=()=>{if(active)active.blur();editing=false;active=null;$('sheet').querySelectorAll('[data-editing]').forEach(e=>delete e.dataset.editing);render(false)};
@@ -141,18 +165,28 @@ const showDialog=(title,desc,buttons)=>{const back=h('div','dialog-backdrop'),bo
  const repeatDialog=(id,d,text)=>{
   const items=splitEvents(text);
   if(!items.length){showDialog('繰り返し設定','先にこの日の予定を入力してください。',[{label:'閉じる',primary:true}]);return}
-  const choose=selected=>showDialog('繰り返し設定',`${label(d)}「${selected}」の繰り返し頻度を選んでください`,[
-   {label:'1カ月',action:()=>addRepeat(id,selected,'months1')},
-   {label:'3カ月',action:()=>addRepeat(id,selected,'months3')},
-   {label:'6カ月',action:()=>addRepeat(id,selected,'months6')},
-   {label:'1年',action:()=>addRepeat(id,selected,'yearly')},
-   {label:'解除',action:()=>{state.repeats=state.repeats.filter(r=>!(r.start===id&&r.text===selected));save();render(true)}},
-   {label:'キャンセル'}]);
+  const choose=selected=>{
+   const rule=state.repeats.find(r=>(r.start===id&&r.text===selected)||(r.start!==id&&isRepeatMatch(r,d)&&(state.repeatOverrides[occurrenceKey(r,id)]?.text??r.text)===selected));
+   const names={months1:'1カ月',monthly:'1カ月',months3:'3カ月',months6:'6カ月',yearly:'1年'};
+   const status=rule?`現在の設定：${names[rule.freq]||'不明'}ごと（基準日 ${rule.start}）`:'現在の設定：なし';
+   const actions=[
+    {label:'1カ月',action:()=>addRepeat(id,selected,'months1',rule)},
+    {label:'3カ月',action:()=>addRepeat(id,selected,'months3',rule)},
+    {label:'6カ月',action:()=>addRepeat(id,selected,'months6',rule)},
+    {label:'1年',action:()=>addRepeat(id,selected,'yearly',rule)}];
+   if(rule)actions.push({label:'繰り返し解除',action:()=>showDialog('繰り返しを解除',`「${selected}」の繰り返しで作られた予定をすべて削除します。元の予定は残ります。`,[
+    {label:'キャンセル'},{label:'解除する',primary:true,action:()=>{state.repeats=state.repeats.filter(r=>r!==rule);const prefix=repeatKey(rule)+'@';Object.keys(state.repeatOverrides).filter(k=>k.startsWith(prefix)).forEach(k=>delete state.repeatOverrides[k]);save();render(true)}}])});
+   actions.push({label:'キャンセル'});
+   showDialog('繰り返し設定',`${label(d)}「${selected}」　${status}`,actions);
+  };
   if(items.length===1){choose(items[0]);return}
   showDialog('予定を選択',`${label(d)} 繰り返し設定する予定を選んでください`,[
    ...items.map(item=>({label:item,action:()=>choose(item)})),{label:'キャンセル'}]);
  };
- const addRepeat=(id,text,freq)=>{state.repeats=state.repeats.filter(r=>!(r.start===id&&r.text===text));state.repeats.push({start:id,text,freq});save();render(true)};
+ const addRepeat=(id,text,freq,oldRule)=>{
+  if(oldRule){oldRule.freq=freq}else{state.repeats=state.repeats.filter(r=>!(r.start===id&&r.text===text));state.repeats.push({id:'r'+Date.now()+'-'+Math.random().toString(36).slice(2),start:id,text,freq})}
+  save();render(true);
+ };
 let reorderSource=null,reorderTarget=null,reorderTimer=null,reorderTriggered=false;
 const paintTabReorder=()=>{$('tabs').querySelectorAll('.tab').forEach(b=>{b.classList.toggle('reorder-source',b.textContent===reorderSource);b.classList.toggle('reorder-target',!!reorderSource&&b.textContent===reorderTarget&&b.textContent!==reorderSource)})};
 const finishTabReorder=()=>{if(reorderSource&&reorderTarget&&reorderSource!==reorderTarget){const from=state.order.indexOf(reorderSource);if(from!==-1){state.order.splice(from,1);const to=state.order.indexOf(reorderTarget);state.order.splice(to,0,reorderSource);save()}}reorderSource=null;reorderTarget=null;$('status').textContent=current;tabs()};
@@ -221,14 +255,16 @@ const render=restore=>{
   let shownMonth='';
   while(d<=end){const id=iso(d),monthKey=`${d.getFullYear()}-${d.getMonth()}`;if(monthKey!==shownMonth){const mh=h('div','month-header',monthLabel(d));sheet.append(mh);shownMonth=monthKey}const row=h('div','dayrow'+(state.rest[id]?' rest':'')),date=h('div','date '+color(d),label(d)),entry=h('div','entry'),inp=h('input');
    date.title='タップで休みを切り替え';date.onclick=()=>{if(editing)return;state.rest[id]=!state.rest[id];save();row.classList.toggle('rest',!!state.rest[id])};
-   inp.type='text';inp.value=scheduleValue(id,d);inp.setAttribute('aria-label',`${id}の予定`);inp.oninput=()=>{state.schedule[id]=inp.value;save()};
+   inp.type='text';inp.value=scheduleValue(id,d);inp.setAttribute('aria-label',`${id}の予定`);inp.addEventListener('focus',()=>{inp.dataset.before=inp.value});inp.oninput=()=>{};inp.addEventListener('blur',()=>{if(inp.value!==inp.dataset.before)saveScheduleEdit(id,d,inp.value)});
    inputEvents(inp);
-   let pressStart=null,pressMoved=false,longPress=false;
-   entry.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;pressStart={x:e.touches[0].clientX,y:e.touches[0].clientY,time:Date.now(),wasEditing:editing};pressMoved=false;longPress=false;if(!editing)inp.classList.add('longpress-pending')},{passive:true});
-   entry.addEventListener('touchmove',e=>{if(!pressStart)return;const dx=e.touches[0].clientX-pressStart.x,dy=e.touches[0].clientY-pressStart.y;if(Math.abs(dx)>9||Math.abs(dy)>9)pressMoved=true},{passive:true});
-   entry.addEventListener('touchend',e=>{if(!pressStart)return;const elapsed=Date.now()-pressStart.time;const shouldRepeat=!pressStart.wasEditing&&!pressMoved&&elapsed>=550;pressStart=null;inp.classList.remove('longpress-pending');if(shouldRepeat){longPress=true;e.preventDefault();if(active)active.blur();editing=false;active=null;repeatDialog(id,d,inp.value||scheduleValue(id,d));setTimeout(()=>{longPress=false},350)}},{passive:false});
-   entry.addEventListener('contextmenu',e=>{if(!editing){e.preventDefault();if(active)active.blur();editing=false;active=null;repeatDialog(id,d,inp.value||scheduleValue(id,d))}});
-   entry.append(inp);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
+    const action=h('button','repeat-action','繰り返し');action.type='button';
+    action.onclick=()=>{if(active)active.blur();editing=false;active=null;repeatDialog(id,d,scheduleValue(id,d))};
+    let swipeStart=null;
+    entry.addEventListener('touchstart',e=>{if(e.touches.length!==1||editing)return;swipeStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});
+    entry.addEventListener('touchend',e=>{if(!swipeStart)return;const dx=e.changedTouches[0].clientX-swipeStart.x,dy=e.changedTouches[0].clientY-swipeStart.y;swipeStart=null;
+     if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;entry.classList.toggle('swipe-open',dx<0);e.preventDefault()}
+    },{passive:false});
+   entry.append(action,inp);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
   }
   sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){

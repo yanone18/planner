@@ -1,5 +1,5 @@
 'use strict';
-const CACHE_NAME = 'planner-offline-v15';
+const CACHE_NAME = 'planner-offline-v16';
 const APP_FILES = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.PNG'];
 
 self.addEventListener('install', event => {
