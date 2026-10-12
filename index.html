@@ -49,6 +49,17 @@ button,input,textarea{font:inherit}
 .task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
 .taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:#fff;overflow:hidden;border-bottom:1px solid #f1f3f6}
 .taskrow input{flex:1;transition:transform .18s ease}
+.taskrow:focus-within{padding-right:36px}
+.drag-handle{display:none;position:absolute;right:0;top:0;bottom:0;width:36px;border:0;background:#fff;color:#637b99;font-size:23px;align-items:center;justify-content:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab;z-index:2}
+.taskrow:focus-within .drag-handle,.taskrow.drag-source .drag-handle{display:flex}
+.taskrow.drag-source{opacity:.32}
+.taskrow.drag-source input{pointer-events:none}
+.taskrow.drag-source{padding-right:36px}
+.taskrow.drop-before{box-shadow:inset 0 3px #3973b5}
+.taskrow.drop-after{box-shadow:inset 0 -3px #3973b5}
+.task-day.drop-empty .addtask{box-shadow:inset 0 3px #3973b5}
+.drag-ghost{position:fixed;z-index:50;pointer-events:none;background:#e9f2ff;border:1px solid #3973b5;border-radius:6px;padding:8px 12px;color:#243247;box-shadow:0 4px 14px #263e6230;max-width:75vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px}
+.sheet.dragging-todo{touch-action:none}
 .taskrow.swiped input{transform:translateX(-66px)}
 .delete{display:none;position:absolute;z-index:1;right:0;top:0;bottom:0;width:64px;border:0;background:#b94350;color:#fff;font-size:14px;padding:0;min-height:0}
 .taskrow.swiped .delete{display:block}
@@ -148,6 +159,55 @@ const tabs=()=>{const bar=$('tabs');bar.replaceChildren();state.order.forEach(na
  b.oncontextmenu=e=>{e.preventDefault();reorderSource=name;reorderTarget=name;paintTabReorder();$('status').textContent='タブを左右に動かして並び替え'};
  b.onclick=()=>{if(reorderSource){finishTabReorder();return}if(reorderTriggered){reorderTriggered=false;return}switchTo(name)};bar.append(b)})};
 const switchTo=name=>{if(name===current)return;if(editing&&active)active.blur();editing=false;active=null;scrolls[current]=$('sheet').scrollTop;transitionDirection=state.order.indexOf(name)>state.order.indexOf(current)?1:-1;current=name;render(true)};
+// Drag handles are only shown on the focused ToDo. Pointer movement does not select text.
+let todoDrag=null;
+const clearDropMarks=()=>{$('sheet').querySelectorAll('.drop-before,.drop-after,.drop-empty').forEach(el=>el.classList.remove('drop-before','drop-after','drop-empty'))};
+const dragTargetAt=(x,y)=>{
+ const sheet=$('sheet'),bounds=sheet.getBoundingClientRect();
+ const safeY=Math.max(bounds.top+4,Math.min(bounds.bottom-4,y));
+ const element=document.elementFromPoint(x,safeY);
+ const group=element?.closest('.task-day');
+ if(!group)return null;
+ const rows=[...group.querySelectorAll('.taskrow')].filter(r=>r!==todoDrag?.row);
+ let index=rows.length;
+ for(let i=0;i<rows.length;i++){if(safeY<rows[i].getBoundingClientRect().top+rows[i].offsetHeight/2){index=i;break}}
+ return {date:group.dataset.date,index,rows,group};
+};
+const updateTodoDrag=(x,y)=>{
+ if(!todoDrag)return;
+ const sheet=$('sheet'),bounds=sheet.getBoundingClientRect();
+ if(y<bounds.top+48)sheet.scrollTop-=Math.max(7,Math.min(22,(bounds.top+48-y)*.35));
+ else if(y>bounds.bottom-48)sheet.scrollTop+=Math.max(7,Math.min(22,(y-(bounds.bottom-48))*.35));
+ todoDrag.ghost.style.top=Math.max(bounds.top,Math.min(bounds.bottom-38,y-18))+'px';
+ todoDrag.ghost.style.left=Math.max(8,Math.min(window.innerWidth-90,x+12))+'px';
+ clearDropMarks();todoDrag.target=dragTargetAt(x,y);
+ if(todoDrag.target){const t=todoDrag.target;if(!t.rows.length)t.group.classList.add('drop-empty');else if(t.index<t.rows.length)t.rows[t.index].classList.add('drop-before');else t.rows[t.rows.length-1].classList.add('drop-after')}
+};
+const autoScrollDrag=()=>{
+ if(!todoDrag)return;
+ const d=todoDrag;
+ if(d.lastX!==undefined)updateTodoDrag(d.lastX,d.lastY);
+ if(todoDrag)todoDrag.frame=requestAnimationFrame(autoScrollDrag);
+};
+const endTodoDrag=(commit)=>{
+ if(!todoDrag)return;
+ const drag=todoDrag;todoDrag=null;if(drag.frame)cancelAnimationFrame(drag.frame);
+ drag.ghost.remove();drag.row.classList.remove('drag-source');$('sheet').classList.remove('dragging-todo');clearDropMarks();
+ if(commit&&drag.target){
+  const from=state.tasksByDate[drag.date]||[],to=state.tasksByDate[drag.target.date]||(state.tasksByDate[drag.target.date]=[]);
+  const [item]=from.splice(drag.index,1);
+  if(item!==undefined){let at=drag.target.index;to.splice(Math.max(0,at),0,item);save();scrolls.ToDo=$('sheet').scrollTop;render(true)}
+ }
+};
+const startTodoDrag=(e,row,date,index,handle)=>{
+ if(e.button!==undefined&&e.button!==0)return;
+ e.preventDefault();e.stopPropagation();
+ if(active)active.blur();editing=false;active=null;
+ const ghost=h('div','drag-ghost',state.tasksByDate[date][index]||'（空欄）');document.body.append(ghost);
+ todoDrag={row,date,index,ghost,target:null};row.classList.add('drag-source');$('sheet').classList.add('dragging-todo');
+ try{handle.setPointerCapture(e.pointerId)}catch{}
+ todoDrag.lastX=e.clientX;todoDrag.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY);todoDrag.frame=requestAnimationFrame(autoScrollDrag);
+};
 const render=restore=>{
  tabs();const sheet=$('sheet');sheet.replaceChildren();sheet.classList.remove('transition-in-left','transition-in-right');
  $('status').textContent=current;$('today').classList.add('hidden');
@@ -168,9 +228,15 @@ const render=restore=>{
   sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){
   get8Days().forEach(d=>{
-   const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d),label(d));head.classList.toggle('rest',!!state.rest[id]);group.append(head);
+   const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d),label(d));head.classList.toggle('rest',!!state.rest[id]);group.dataset.date=id;group.append(head);
    const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
-   tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};row.append(inp,del);group.append(row)});
+   tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};const handle=h('button','drag-handle','⠿');handle.type='button';handle.setAttribute('aria-label','ドラッグしてToDoを移動');
+    handle.addEventListener('pointerdown',e=>startTodoDrag(e,row,id,i,handle));
+    handle.addEventListener('pointermove',e=>{if(todoDrag){e.preventDefault();todoDrag.lastX=e.clientX;todoDrag.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY)}});
+    handle.addEventListener('pointerup',e=>{if(todoDrag){e.preventDefault();endTodoDrag(true)}});
+    handle.addEventListener('pointercancel',()=>endTodoDrag(false));
+    handle.addEventListener('lostpointercapture',()=>{if(todoDrag)endTodoDrag(false)});
+    row.append(inp,del,handle);group.append(row)});
    const add=h('button','addtask','＋ ToDoを追加');add.onclick=()=>{state.tasksByDate[id].push('');save();render(false);const groups=sheet.querySelectorAll('.task-day'),gi=get8Days().findIndex(x=>iso(x)===id),last=groups[gi]?.querySelectorAll('input');const target=last?.[last.length-1];if(target){target.focus();target.scrollIntoView({block:'nearest'})}};group.append(add);sheet.append(group);
   });
   const box=h('section','memo'),area=h('textarea');
