@@ -46,7 +46,7 @@ button,input,textarea{font:inherit}
 .entry input:focus{-webkit-user-select:text;user-select:text}
 .entry input:focus,.taskrow input:focus{background:transparent}
 .task-day{padding:0 0 10px}
-.task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
+.task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:400;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
 .taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:#fff;overflow:hidden;border-bottom:1px solid #f1f3f6}
 .taskrow input{flex:1;transition:transform .18s ease}
 .taskrow:focus-within{padding-right:36px}
@@ -57,13 +57,13 @@ button,input,textarea{font:inherit}
 .taskrow.drag-source{padding-right:36px}
 .taskrow.drop-before{box-shadow:inset 0 3px #3973b5}
 .taskrow.drop-after{box-shadow:inset 0 -3px #3973b5}
-.task-day.drop-empty .addtask{box-shadow:inset 0 3px #3973b5}
+.task-day.drop-empty .task-date{box-shadow:inset 0 3px #3973b5}
 .drag-ghost{position:fixed;z-index:50;pointer-events:none;background:#e9f2ff;border:1px solid #3973b5;border-radius:6px;padding:8px 12px;color:#243247;box-shadow:0 4px 14px #263e6230;max-width:75vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px}
 .sheet.dragging-todo{touch-action:none}
 .taskrow.swiped input{transform:translateX(-66px)}
 .delete{display:none;position:absolute;z-index:1;right:0;top:0;bottom:0;width:64px;border:0;background:#b94350;color:#fff;font-size:14px;padding:0;min-height:0}
 .taskrow.swiped .delete{display:block}
-.addtask{width:100%;text-align:left;padding:6px 15px 6px 33px;border:0;background:#fff;color:#8793a3;font-size:14px}
+.addtask{margin-left:auto;flex:none;width:auto;text-align:right;padding:3px 0 3px 12px;border:0;background:transparent;color:#71849b;font-size:13px;font-weight:400;white-space:nowrap}
 .memo{padding:12px 15px 25px;background:#fff;display:flex;flex-direction:column;min-height:320px;border-top:1px solid #dfe5ee}
 .memo textarea{display:block;flex:none;width:100%;height:auto;min-height:260px;resize:none;overflow:hidden;border:0;outline:0;background:#fff;font:17px/1.7 -apple-system,BlinkMacSystemFont,sans-serif;color:#243247;caret-color:#315f97;touch-action:auto}
 .today{position:fixed;z-index:4;right:max(16px,calc((100vw - 650px)/2 + 16px));bottom:max(18px,env(safe-area-inset-bottom));border:0;border-radius:50%;width:46px;height:46px;background:#315f97;color:white;font-size:23px;box-shadow:0 3px 12px #263e6229}
@@ -78,6 +78,7 @@ button,input,textarea{font:inherit}
 .dialog button{border:1px solid #d9e0e8;background:#fff;border-radius:9px;padding:10px 12px}
 .dialog .primary{background:#315f97;color:white;border-color:#315f97}
 .dialog-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.dialog-actions button{flex:1;min-width:100px}
 </style>
 </head>
 <body>
@@ -85,6 +86,7 @@ button,input,textarea{font:inherit}
 <header class="top"><nav class="tabs" id="tabs" aria-label="画面切り替え"></nav></header>
 <div class="toolbar"><span id="status">予定表</span><button class="menu" id="menu" aria-label="メニュー">⋯</button></div>
 <main class="sheet" id="sheet"></main>
+<input id="restore-file" type="file" accept=".json,application/json" hidden>
 </div>
 <button id="today" class="today hidden" aria-label="今日に戻る">↑</button>
 <script>
@@ -228,7 +230,7 @@ const render=restore=>{
   sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){
   get8Days().forEach(d=>{
-   const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d),label(d));head.classList.toggle('rest',!!state.rest[id]);group.dataset.date=id;group.append(head);
+   const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d));head.classList.toggle('rest',!!state.rest[id]);group.dataset.date=id;head.append(h('span','',label(d)));group.append(head);
    const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
    tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};const handle=h('button','drag-handle','⠿');handle.type='button';handle.setAttribute('aria-label','ドラッグしてToDoを移動');
     handle.addEventListener('pointerdown',e=>startTodoDrag(e,row,id,i,handle));
@@ -237,7 +239,7 @@ const render=restore=>{
     handle.addEventListener('pointercancel',()=>endTodoDrag(false));
     handle.addEventListener('lostpointercapture',()=>{if(todoDrag)endTodoDrag(false)});
     row.append(inp,del,handle);group.append(row)});
-   const add=h('button','addtask','＋ ToDoを追加');add.onclick=()=>{state.tasksByDate[id].push('');save();render(false);const groups=sheet.querySelectorAll('.task-day'),gi=get8Days().findIndex(x=>iso(x)===id),last=groups[gi]?.querySelectorAll('input');const target=last?.[last.length-1];if(target){target.focus();target.scrollIntoView({block:'nearest'})}};group.append(add);sheet.append(group);
+   const add=h('button','addtask','＋ ToDoを追加');add.onclick=()=>{state.tasksByDate[id].push('');save();render(false);const groups=sheet.querySelectorAll('.task-day'),gi=get8Days().findIndex(x=>iso(x)===id),last=groups[gi]?.querySelectorAll('input');const target=last?.[last.length-1];if(target){target.focus();target.scrollIntoView({block:'nearest'})}};head.append(add);sheet.append(group);
   });
   const box=h('section','memo'),area=h('textarea');
   area.value=state.memo;area.placeholder='ここにメモを入力';area.setAttribute('aria-label','メモ');
@@ -249,7 +251,57 @@ const render=restore=>{
  if(restore)sheet.scrollTop=scrolls[current]||0;else sheet.scrollTop=0;
  if(!restore){sheet.classList.add(transitionDirection>0?'transition-in-right':'transition-in-left')}
 };
-$('menu').onclick=()=>{if(editing)return;if(current==='ToDo')showDialog('ToDo','削除したい項目を左にスワイプして「削除」を押してね。',[{label:'閉じる',primary:true}]);else if(current==='予定表')showDialog('予定表','入力を終了した予定を長押しすると、繰り返し設定を開けます。',[{label:'閉じる',primary:true}]);};
+const backupNow=()=>{
+ try{
+  save();
+  const data={format:'planner-backup',version:1,exportedAt:new Date().toISOString(),storageKey,data:JSON.parse(localStorage.getItem(storageKey))};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  const d=new Date(),stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+  a.href=url;a.download=`予定表バックアップ_${stamp}.json`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+ }catch(err){showDialog('保存できませんでした','バックアップの作成に失敗しました。もう一度お試しください。',[{label:'閉じる',primary:true}])}
+};
+const validBackup=data=>{
+ if(!data||typeof data!=='object'||Array.isArray(data))return false;
+ if(data.format!=='planner-backup'||data.version!==1||data.storageKey!==storageKey)return false;
+ const s=data.data;
+ if(!s||typeof s!=='object'||Array.isArray(s))return false;
+ if(!Array.isArray(s.order)||!s.order.every(x=>typeof x==='string'))return false;
+ if(!s.schedule||typeof s.schedule!=='object'||Array.isArray(s.schedule))return false;
+ if(!s.tasksByDate||typeof s.tasksByDate!=='object'||Array.isArray(s.tasksByDate))return false;
+ if(!Object.values(s.tasksByDate).every(x=>Array.isArray(x)&&x.every(v=>typeof v==='string')))return false;
+ if(typeof s.memo!=='string'||!Array.isArray(s.repeats)||!s.rest||typeof s.rest!=='object'||Array.isArray(s.rest))return false;
+ return true;
+};
+const restorePicker=$('restore-file');
+restorePicker.addEventListener('change',async()=>{
+ const file=restorePicker.files&&restorePicker.files[0];restorePicker.value='';if(!file)return;
+ try{
+  if(file.size>10*1024*1024)throw new Error('too large');
+  const data=JSON.parse(await file.text());
+  if(!validBackup(data))throw new Error('invalid format');
+  const when=data.exportedAt?new Date(data.exportedAt).toLocaleString('ja-JP'):'日時不明';
+  showDialog('バックアップから復元',`保存日時：${when}。現在の予定・ToDo・メモ・繰り返し設定などは、バックアップの内容に置き換わります。よろしいですか？`,[
+   {label:'キャンセル'},
+   {label:'復元する',primary:true,action:()=>{
+    try{
+     localStorage.setItem(storageKey,JSON.stringify(data.data));
+     state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[]},data.data);
+     state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
+     if(active)active.blur();active=null;editing=false;current='予定表';scrolls={};render(false);
+     showDialog('復元完了','バックアップのデータを復元しました。',[{label:'閉じる',primary:true}]);
+    }catch(e){showDialog('復元できませんでした','データを保存できませんでした。',[{label:'閉じる',primary:true}])}
+   }}]);
+ }catch(err){showDialog('読み込めませんでした','この予定表で作成した有効なバックアップファイル（JSON）を選んでください。',[{label:'閉じる',primary:true}])}
+});
+$('menu').onclick=()=>{
+ if(editing&&active)active.blur();editing=false;active=null;
+ showDialog('メニュー','予定・ToDo・メモなどのデータを保存・復元できます。',[
+  {label:'バックアップを保存',action:backupNow},
+  {label:'バックアップから復元',action:()=>restorePicker.click()},
+  {label:'閉じる'}
+ ]);
+};
 $('today').onclick=()=>{$('sheet').scrollTo({top:0,behavior:'smooth'})};
 // 画面切り替えは上部タブのタップのみ。横スワイプは各項目の操作に使う。
 save();render(false);
