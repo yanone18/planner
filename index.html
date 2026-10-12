@@ -14,10 +14,10 @@
 :root{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",sans-serif;color:#243247}
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:#f3f5f8}
-body{overflow:hidden}
+body{overflow:hidden;position:fixed;inset:0;width:100%;height:100%;overscroll-behavior:none}
 button,input,textarea{font:inherit}
-.app{max-width:650px;width:100%;height:100dvh;margin:auto;background:#fff;display:flex;flex-direction:column;overflow:hidden}
-.top{position:relative;z-index:5;flex:none;background:#fff;color:#243247;padding:7px 10px 0;border-bottom:1px solid #e7ebf0;padding-top:max(7px,env(safe-area-inset-top))}
+.app{position:fixed;inset:0;max-width:650px;width:100%;height:100dvh;margin:0 auto;background:#fff;display:flex;flex-direction:column;overflow:hidden;left:0;right:0}
+.top{position:relative;z-index:5;flex-shrink:0;flex:none;background:#fff;color:#243247;padding:7px 10px 0;border-bottom:1px solid #e7ebf0;padding-top:max(7px,env(safe-area-inset-top))}
 .brand{text-align:center;font-size:10px;letter-spacing:.2em;margin:0 0 5px;color:#758397}
 .tabs{display:flex;gap:3px}
 .tab{flex:1;min-width:0;padding:9px 2px;background:transparent;border:0;border-bottom:2px solid transparent;color:#78879a;font-weight:600;font-size:14px;touch-action:pan-y}
@@ -44,7 +44,8 @@ button,input,textarea{font:inherit}
 .entry input:not(:focus){-webkit-user-select:none;user-select:none}
 .entry input.longpress-pending{-webkit-user-select:none!important;user-select:none!important}
 .entry input:focus{-webkit-user-select:text;user-select:text}
-.entry input:focus,.taskrow input:focus{background:#f4f8ff}
+.entry input:focus{background:#f4f8ff}
+.taskrow input:focus{background:transparent!important}
 .task-day{padding:0 0 10px}
 .task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
 .taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:#fff;overflow:hidden;border-bottom:1px solid #f1f3f6}
@@ -99,7 +100,29 @@ let current=state.order.includes('予定表')?'予定表':state.order[0],editing
 const save=()=>localStorage.setItem(storageKey,JSON.stringify(state));
 const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date(d);x.setDate(d.getDate()+i);arr.push(x)}return arr};
 const isRepeatMatch=(rule,d)=>{const start=new Date(rule.start+'T00:00:00');if(d<start)return false;if(rule.until&&iso(d)>rule.until)return false;if(rule.freq==='daily')return true;if(rule.freq==='weekly')return d.getDay()===start.getDay();if(rule.freq==='monthly')return d.getDate()===start.getDate();if(rule.freq==='yearly')return d.getMonth()===start.getMonth()&&d.getDate()===start.getDate();const interval=({months1:1,months3:3,months6:6})[rule.freq];if(interval){const monthDiff=(d.getFullYear()-start.getFullYear())*12+d.getMonth()-start.getMonth();return monthDiff>=0&&monthDiff%interval===0&&d.getDate()===start.getDate()}return false};
-const scheduleValue=(id,d)=>{if(state.schedule[id])return state.schedule[id];const rules=(state.repeats||[]).filter(r=>isRepeatMatch(r,d)).sort((a,b)=>b.start.localeCompare(a.start));return rules.length?rules[0].text:''};
+const splitScheduleItems=text=>{
+ const value=String(text||'');
+ const emojiSeq=/(?:\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?(?:\u200D\p{Extended_Pictographic}(?:\uFE0F|\uFE0E)?)*)/gu;
+ const matches=[...value.matchAll(emojiSeq)];
+ if(matches.length<2)return [value.trim()].filter(Boolean);
+ const items=[];
+ for(let i=0;i<matches.length;i++){
+  const start=matches[i].index;
+  const end=i+1<matches.length?matches[i+1].index:value.length;
+  const item=value.slice(start,end).trim();
+  if(item)items.push(item);
+ }
+ if(matches[0].index>0){const prefix=value.slice(0,matches[0].index).trim();if(prefix&&items.length)items[0]=prefix+items[0]}
+ return items.length?items:[value.trim()].filter(Boolean);
+};
+const scheduleValue=(id,d)=>{
+ const base=state.schedule[id]||'';
+ const baseItems=splitScheduleItems(base);
+ const rules=(state.repeats||[]).filter(r=>r.start!==id&&isRepeatMatch(r,d)).sort((a,b)=>a.start.localeCompare(b.start));
+ const added=[];
+ for(const rule of rules){if(!baseItems.includes(rule.text)&&!added.includes(rule.text))added.push(rule.text)}
+ return [base,...added].filter(Boolean).join('');
+};
 const setEditing=(el)=>{editing=true;active=el;el.dataset.editing='1';};
 const finish=()=>{if(active)active.blur();editing=false;active=null;$('sheet').querySelectorAll('[data-editing]').forEach(e=>delete e.dataset.editing);render(false)};
 const inputEvents=(el,opts={})=>{
@@ -108,17 +131,25 @@ const inputEvents=(el,opts={})=>{
  el.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&current!=='メモ'){e.preventDefault();if(opts.onEnter)opts.onEnter();else finish()}});
 };
 const showDialog=(title,desc,buttons)=>{const back=h('div','dialog-backdrop'),box=h('div','dialog');box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.append(h('h2','',title),h('p','',desc));const actions=h('div','dialog-actions');buttons.forEach(b=>{const btn=h('button',b.primary?'primary':'',b.label);btn.onclick=()=>{back.remove();b.action&&b.action()};actions.append(btn)});box.append(actions);back.append(box);document.body.append(back)};
-const repeatDialog=(id,d,text)=>{if(!text.trim()){showDialog('繰り返し設定','先にこの日の予定を入力してください。',[{label:'閉じる',primary:true}]);return}
- showDialog('繰り返し設定',`${label(d)}「${text}」
+const repeatDialog=(id,d,text)=>{
+ const items=splitScheduleItems(text);
+ if(!items.length){showDialog('繰り返し設定','先にこの日の予定を入力してください。',[{label:'閉じる',primary:true}]);return}
+ if(items.length===1){repeatFrequencyDialog(id,d,items[0]);return}
+ showDialog('繰り返し設定','繰り返したい予定を選んでください。',[
+  ...items.map(item=>({label:item,action:()=>repeatFrequencyDialog(id,d,item)})),
+  {label:'キャンセル'}
+ ]);
+};
+const repeatFrequencyDialog=(id,d,text)=>showDialog('繰り返し設定',`${label(d)}「${text}」
 繰り返す頻度を選んでください`,[
  {label:'1カ月',action:()=>addRepeat(id,text,'months1')},
  {label:'3カ月',action:()=>addRepeat(id,text,'months3')},
  {label:'6カ月',action:()=>addRepeat(id,text,'months6')},
  {label:'1年',action:()=>addRepeat(id,text,'yearly')},
- {label:'解除',action:()=>{state.repeats=state.repeats.filter(r=>r.start!==id);save();render(false)}},
+ {label:'解除',action:()=>{state.repeats=state.repeats.filter(r=>!(r.start===id&&r.text===text));save();render(false)}},
  {label:'キャンセル'}
- ])};
-const addRepeat=(id,text,freq)=>{state.repeats=state.repeats.filter(r=>r.start!==id);state.repeats.push({start:id,text,freq});save();render(false)};
+]);
+const addRepeat=(id,text,freq)=>{state.repeats=state.repeats.filter(r=>!(r.start===id&&r.text===text));state.repeats.push({start:id,text,freq});save();render(false)};
 let reorderSource=null,reorderTarget=null,reorderTimer=null,reorderTriggered=false;
 const paintTabReorder=()=>{$('tabs').querySelectorAll('.tab').forEach(b=>{b.classList.toggle('reorder-source',b.textContent===reorderSource);b.classList.toggle('reorder-target',!!reorderSource&&b.textContent===reorderTarget&&b.textContent!==reorderSource)})};
 const finishTabReorder=()=>{if(reorderSource&&reorderTarget&&reorderSource!==reorderTarget){const from=state.order.indexOf(reorderSource);if(from!==-1){state.order.splice(from,1);const to=state.order.indexOf(reorderTarget);state.order.splice(to,0,reorderSource);save()}}reorderSource=null;reorderTarget=null;$('status').textContent=current;tabs()};
