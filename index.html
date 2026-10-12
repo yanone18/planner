@@ -18,7 +18,6 @@ body{overflow:hidden;position:fixed;inset:0;width:100%;height:100%;overscroll-be
 button,input,textarea{font:inherit}
 .app{position:fixed;inset:0;max-width:650px;width:100%;height:100dvh;margin:0 auto;background:#fff;display:flex;flex-direction:column;overflow:hidden;left:0;right:0}
 .top{position:relative;z-index:5;flex-shrink:0;flex:none;background:#fff;color:#243247;padding:7px 10px 0;border-bottom:1px solid #e7ebf0;padding-top:max(7px,env(safe-area-inset-top))}
-.brand{text-align:center;font-size:10px;letter-spacing:.2em;margin:0 0 5px;color:#758397}
 .tabs{display:flex;gap:3px}
 .tab{flex:1;min-width:0;padding:9px 2px;background:transparent;border:0;border-bottom:2px solid transparent;color:#78879a;font-weight:600;font-size:14px;touch-action:pan-y}
 .tab.active{background:#fff;color:#294f83;border-bottom-color:#3973b5}
@@ -44,7 +43,7 @@ button,input,textarea{font:inherit}
 .entry input:not(:focus){-webkit-user-select:none;user-select:none}
 .entry input.longpress-pending{-webkit-user-select:none!important;user-select:none!important}
 .entry input:focus{-webkit-user-select:text;user-select:text}
-.entry input:focus{background:#f4f8ff}
+.entry input:focus{background:transparent!important}
 .taskrow input:focus{background:transparent!important}
 .task-day{padding:0 0 10px}
 .task-date{position:sticky;top:0;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:700;background:#f7f9fc;color:#526175;border-bottom:1px solid #edf0f4}
@@ -72,7 +71,7 @@ button,input,textarea{font:inherit}
 </head>
 <body>
 <div class="app">
-<header class="top"><div class="brand">PLANNER</div><nav class="tabs" id="tabs" aria-label="画面切り替え"></nav></header>
+<header class="top"><nav class="tabs" id="tabs" aria-label="画面切り替え"></nav></header>
 <div class="toolbar"><span id="status">予定表</span><button class="menu" id="menu" aria-label="メニュー">⋯</button></div>
 <main class="sheet" id="sheet"></main>
 </div>
@@ -80,6 +79,8 @@ button,input,textarea{font:inherit}
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id);
+const syncViewport=()=>{const vv=window.visualViewport;const height=vv?vv.height:window.innerHeight;document.querySelector('.app').style.height=height+'px';if(vv)document.querySelector('.app').style.top=vv.offsetTop+'px'};
+window.addEventListener('resize',syncViewport);if(window.visualViewport){window.visualViewport.addEventListener('resize',syncViewport);window.visualViewport.addEventListener('scroll',syncViewport)}syncViewport();
 const today=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth(),d.getDate())};
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const weekday=['日','月','火','水','木','金','土'];
