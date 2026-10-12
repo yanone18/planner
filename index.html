@@ -164,7 +164,8 @@ let todoDrag=null;
 const clearDropMarks=()=>{$('sheet').querySelectorAll('.drop-before,.drop-after,.drop-empty').forEach(el=>el.classList.remove('drop-before','drop-after','drop-empty'))};
 const dragTargetAt=(x,y)=>{
  const sheet=$('sheet'),bounds=sheet.getBoundingClientRect();
- const safeY=Math.max(bounds.top+4,Math.min(bounds.bottom-4,y));
+ const edges=dragVisibleEdges();
+ const safeY=Math.max(edges.top+4,Math.min(edges.bottom-4,y));
  const element=document.elementFromPoint(x,safeY);
  const group=element?.closest('.task-day');
  if(!group)return null;
@@ -173,21 +174,35 @@ const dragTargetAt=(x,y)=>{
  for(let i=0;i<rows.length;i++){if(safeY<rows[i].getBoundingClientRect().top+rows[i].offsetHeight/2){index=i;break}}
  return {date:group.dataset.date,index,rows,group};
 };
+// Keep edge-scrolling within the visible portion of the sheet (including iOS keyboard).
+const dragVisibleEdges=()=>{
+ const bounds=$('sheet').getBoundingClientRect();
+ const vv=window.visualViewport;
+ const visibleTop=vv?vv.offsetTop:0;
+ const visibleBottom=vv?vv.offsetTop+vv.height:window.innerHeight;
+ return {top:Math.max(bounds.top,visibleTop),bottom:Math.min(bounds.bottom,visibleBottom)};
+};
 const updateTodoDrag=(x,y)=>{
  if(!todoDrag)return;
- const sheet=$('sheet'),bounds=sheet.getBoundingClientRect();
- if(todoDrag.moved&&y<bounds.top+48)sheet.scrollTop-=Math.max(7,Math.min(22,(bounds.top+48-y)*.35));
- else if(todoDrag.moved&&y>bounds.bottom-48)sheet.scrollTop+=Math.max(7,Math.min(22,(y-(bounds.bottom-48))*.35));
- todoDrag.ghost.style.top=Math.max(bounds.top,Math.min(bounds.bottom-38,y-18))+'px';
- todoDrag.ghost.style.left=Math.max(8,Math.min(window.innerWidth-90,x+12))+'px';
- clearDropMarks();todoDrag.target=dragTargetAt(x,y);
- if(todoDrag.target){const t=todoDrag.target;if(!t.rows.length)t.group.classList.add('drop-empty');else if(t.index<t.rows.length)t.rows[t.index].classList.add('drop-before');else t.rows[t.rows.length-1].classList.add('drop-after')}
+ const d=todoDrag,edges=dragVisibleEdges();
+ d.lastX=x;d.lastY=y;
+ d.ghost.style.top=Math.max(edges.top,Math.min(edges.bottom-38,y-18))+'px';
+ d.ghost.style.left=Math.max(8,Math.min(window.innerWidth-90,x+12))+'px';
+ clearDropMarks();d.target=dragTargetAt(x,y);
+ if(d.target){const t=d.target;if(!t.rows.length)t.group.classList.add('drop-empty');else if(t.index<t.rows.length)t.rows[t.index].classList.add('drop-before');else t.rows[t.rows.length-1].classList.add('drop-after')}
 };
 const autoScrollDrag=()=>{
- if(!todoDrag)return;
- const d=todoDrag;
- if(d.moved&&d.lastX!==undefined)updateTodoDrag(d.lastX,d.lastY);
- if(todoDrag)todoDrag.frame=requestAnimationFrame(autoScrollDrag);
+ const d=todoDrag;if(!d)return;
+ if(d.moved&&d.lastY!==undefined){
+  const sheet=$('sheet'),edges=dragVisibleEdges(),zone=65;
+  let speed=0;
+  if(d.lastY<edges.top+zone)speed=-Math.min(24,Math.max(4,(edges.top+zone-d.lastY)*.30));
+  else if(d.lastY>edges.bottom-zone)speed=Math.min(24,Math.max(4,(d.lastY-(edges.bottom-zone))*.30));
+  if(speed){const previous=sheet.scrollTop;sheet.scrollTop+=speed;
+   if(sheet.scrollTop!==previous)updateTodoDrag(d.lastX,d.lastY);
+  }
+ }
+ if(todoDrag===d)d.frame=requestAnimationFrame(autoScrollDrag);
 };
 const endTodoDrag=(commit)=>{
  if(!todoDrag)return;
