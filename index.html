@@ -54,9 +54,7 @@ button,input,textarea{font:inherit}
 .taskrow.swiped .delete{display:block}
 .addtask{width:100%;text-align:left;padding:6px 15px 6px 33px;border:0;background:#fff;color:#8793a3;font-size:14px}
 .memo{padding:12px 15px 25px;background:#fff;display:flex;flex-direction:column;min-height:320px;border-top:1px solid #dfe5ee}
-.memo-title{font-size:16px;font-weight:600;color:#526175;margin:0 0 10px}
-.memo textarea{min-height:260px!important;height:320px!important;flex:none!important;overflow:auto;scroll-margin-bottom:180px}
-.memo textarea{display:block;flex:1;width:100%;height:100%;min-height:0;resize:none;overflow:auto;border:0;outline:0;background:#fff;font:17px/1.7 -apple-system,BlinkMacSystemFont,sans-serif;color:#243247;caret-color:#315f97;touch-action:auto}
+.memo textarea{display:block;flex:none;width:100%;height:auto;min-height:260px;resize:none;overflow:hidden;border:0;outline:0;background:#fff;font:17px/1.7 -apple-system,BlinkMacSystemFont,sans-serif;color:#243247;caret-color:#315f97;touch-action:auto}
 .today{position:fixed;z-index:4;right:max(16px,calc((100vw - 650px)/2 + 16px));bottom:max(18px,env(safe-area-inset-bottom));border:0;border-radius:50%;width:46px;height:46px;background:#315f97;color:white;font-size:23px;box-shadow:0 3px 12px #263e6229}
 .hidden{display:none!important}
 .trashview{padding:14px}
@@ -175,10 +173,11 @@ const render=restore=>{
    tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};row.append(inp,del);group.append(row)});
    const add=h('button','addtask','＋ ToDoを追加');add.onclick=()=>{state.tasksByDate[id].push('');save();render(false);const groups=sheet.querySelectorAll('.task-day'),gi=get8Days().findIndex(x=>iso(x)===id),last=groups[gi]?.querySelectorAll('input');const target=last?.[last.length-1];if(target){target.focus();target.scrollIntoView({block:'nearest'})}};group.append(add);sheet.append(group);
   });
-  const box=h('section','memo'),heading=h('h2','memo-title','メモ'),area=h('textarea');
+  const box=h('section','memo'),area=h('textarea');
   area.value=state.memo;area.placeholder='ここにメモを入力';area.setAttribute('aria-label','メモ');
-  area.oninput=()=>{state.memo=area.value;save()};inputEvents(area);
-  box.append(heading,area);sheet.append(box);sheet.onscroll=null;
+  const resizeMemo=()=>{area.style.height='auto';area.style.height=Math.max(260,area.scrollHeight)+'px'};
+  area.oninput=()=>{state.memo=area.value;save();resizeMemo()};inputEvents(area);
+  box.append(area);sheet.append(box);resizeMemo();sheet.onscroll=null;
  }
 
  if(restore)sheet.scrollTop=scrolls[current]||0;else sheet.scrollTop=0;
