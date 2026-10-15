@@ -17,7 +17,7 @@ html,body{margin:0;min-height:100%;background:#f3f5f8}
 body{overflow:hidden}
 button,input,textarea{font:inherit}
 .app{max-width:650px;width:100%;height:100dvh;margin:auto;background:#fff;display:flex;flex-direction:column;overflow:hidden}
-.top{position:relative;z-index:5;flex:none;background:#fff;color:#243247;padding:7px 10px 0;border-bottom:1px solid #e7ebf0;padding-top:max(7px,env(safe-area-inset-top))}
+.top{position:relative;z-index:5;flex:none;background:#fff;color:#243247;padding:5px 10px 0;border-top:1px solid #e7ebf0;padding-bottom:max(5px,env(safe-area-inset-bottom))}
 .brand{text-align:center;font-size:10px;letter-spacing:.2em;margin:0 0 5px;color:#758397}
 .tabs{display:flex;gap:3px}
 .tab{flex:1;min-width:0;padding:9px 2px;background:transparent;border:0;border-bottom:2px solid transparent;color:#78879a;font-weight:600;font-size:14px;touch-action:pan-y}
@@ -61,7 +61,7 @@ button,input,textarea{font:inherit}
 .taskrow.drag-source{padding-right:36px}
 .taskrow.drop-before{box-shadow:inset 0 3px #3973b5}
 .taskrow.drop-after{box-shadow:inset 0 -3px #3973b5}
-.task-day.drop-empty .task-date{box-shadow:inset 0 3px #3973b5}
+.task-day.drop-empty .task-date{box-shadow:inset 0 -3px #3973b5}
 .drag-ghost{position:fixed;z-index:50;pointer-events:none;background:#e9f2ff;border:1px solid #3973b5;border-radius:6px;padding:8px 12px;color:#243247;box-shadow:0 4px 14px #263e6230;max-width:75vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px}
 .sheet.dragging-todo{touch-action:none}
 .taskrow.swiped input{transform:translateX(-66px)}
@@ -70,7 +70,7 @@ button,input,textarea{font:inherit}
 .addtask{margin-left:auto;flex:none;width:auto;text-align:right;padding:3px 0 3px 12px;border:0;background:transparent;color:#71849b;font-size:13px;font-weight:400;white-space:nowrap}
 .memo{padding:12px 15px 25px;background:#fff;display:flex;flex-direction:column;min-height:320px;border-top:1px solid #dfe5ee}
 .memo textarea{display:block;flex:none;width:100%;height:auto;min-height:260px;resize:none;overflow:hidden;border:0;outline:0;background:#fff;font:17px/1.7 -apple-system,BlinkMacSystemFont,sans-serif;color:#243247;caret-color:#315f97;touch-action:auto}
-.today{position:fixed;z-index:4;right:max(16px,calc((100vw - 650px)/2 + 16px));bottom:max(18px,env(safe-area-inset-bottom));border:0;border-radius:50%;width:46px;height:46px;background:#315f97;color:white;font-size:23px;box-shadow:0 3px 12px #263e6229}
+.today{position:fixed;z-index:4;right:max(16px,calc((100vw - 650px)/2 + 16px));bottom:calc(80px + env(safe-area-inset-bottom));border:0;border-radius:50%;width:46px;height:46px;background:#315f97;color:white;font-size:23px;box-shadow:0 3px 12px #263e6229}
 .hidden{display:none!important}
 .trashview{padding:14px}
 .trashitem{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid #e5eaf0}
@@ -87,9 +87,9 @@ button,input,textarea{font:inherit}
 </head>
 <body>
 <div class="app">
-<header class="top"><nav class="tabs" id="tabs" aria-label="画面切り替え"></nav></header>
 <div class="toolbar"><span id="status">予定表</span><button class="menu" id="menu" aria-label="メニュー">⋯</button></div>
 <main class="sheet" id="sheet"></main>
+<header class="top"><nav class="tabs" id="tabs" aria-label="画面切り替え"></nav></header>
 <input id="restore-file" type="file" accept=".json,application/json" hidden>
 </div>
 <button id="today" class="today hidden" aria-label="今日に戻る">↑</button>
