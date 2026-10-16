@@ -50,9 +50,9 @@ button,input,textarea{font:inherit}
 .task-day.rest{background:#fff9df}
 .task-date > span:first-child{display:inline-flex;align-items:center;gap:9px}
 .task-date > span:first-child::before{content:"";display:inline-block;width:7px;height:7px;flex:none;background:currentColor;transform:rotate(45deg);border-radius:1px}
-.task-date{position:relative;z-index:2;display:flex;align-items:center;min-height:35px;padding:7px 13px;font-size:17px;font-weight:400;background:transparent;color:#526175;border-bottom:1px solid #edf0f4}
-.taskrow{position:relative;min-height:34px;display:flex;align-items:center;padding-left:20px;background:transparent;overflow:hidden;border-bottom:1px solid #f1f3f6}
-.taskrow input{flex:1;transition:transform .18s ease}
+.task-date{position:relative;z-index:2;display:flex;align-items:center;min-height:35px;padding:6px 13px 5px;font-size:17px;font-weight:400;background:transparent;color:#526175;border-bottom:1px solid #edf0f4}
+.taskrow{position:relative;min-height:30px;display:flex;align-items:center;padding-left:20px;background:transparent;overflow:hidden;border-bottom:1px solid #f1f3f6}
+.taskrow input{flex:1;padding-top:3px;padding-bottom:3px;transition:transform .18s ease}
 .taskrow:focus-within{padding-right:36px}
 .drag-handle{display:none;position:absolute;right:0;top:0;bottom:0;width:36px;border:0;background:transparent;color:#637b99;font-size:23px;align-items:center;justify-content:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab;z-index:2}
 .taskrow:focus-within .drag-handle,.taskrow.drag-source .drag-handle{display:flex}
@@ -335,14 +335,14 @@ const render=restore=>{
   get8Days().forEach(d=>{
    const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d));group.classList.toggle('rest',!!state.rest[id]);head.classList.toggle('rest',!!state.rest[id]);group.dataset.date=id;head.append(h('span','',label(d)));group.append(head);
    const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
-   tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};const handle=h('button','drag-handle','⠿');handle.type='button';handle.setAttribute('aria-label','ドラッグしてToDoを移動');
+   tasks.forEach((value,i)=>{const row=h('div','taskrow'),inp=h('input'),del=h('button','delete','削除');inp.type='text';inp.value=value;inp.setAttribute('aria-label',`${id}のToDo`);inp.oninput=()=>{state.tasksByDate[id][i]=inp.value;save()};inp.addEventListener('blur',()=>{if(inp.value.trim()!=='')return;setTimeout(()=>{const items=state.tasksByDate[id];if(!Array.isArray(items))return;const at=items.findIndex(v=>typeof v==='string'&&v.trim()==='');if(at<0)return;items.splice(at,1);save();if(current==='ToDo'&&!editing&&!todoDrag){scrolls.ToDo=sheet.scrollTop;render(true)}},0)});inputEvents(inp);let touchStart=null;row.addEventListener('touchstart',e=>{if(editing||e.touches.length!==1)return;touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY}},{passive:true});row.addEventListener('touchend',e=>{if(!touchStart)return;const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;touchStart=null;if(dx < -45 && Math.abs(dx)>Math.abs(dy)*1.4){if(active)active.blur();editing=false;active=null;row.classList.add('swiped')}else if(dx>25)row.classList.remove('swiped')},{passive:true});del.onclick=()=>{const top=sheet.scrollTop;state.tasksByDate[id].splice(i,1);save();render(true);$('sheet').scrollTop=top};const handle=h('button','drag-handle','⠿');handle.type='button';handle.setAttribute('aria-label','ドラッグしてToDoを移動');
     handle.addEventListener('pointerdown',e=>startTodoDrag(e,row,id,i,handle));
     handle.addEventListener('pointermove',e=>{if(todoDrag){e.preventDefault();todoDrag.lastX=e.clientX;todoDrag.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY)}});
     handle.addEventListener('pointerup',e=>{if(todoDrag){e.preventDefault();endTodoDrag(true)}});
     handle.addEventListener('pointercancel',()=>endTodoDrag(false));
     handle.addEventListener('lostpointercapture',()=>{if(todoDrag)endTodoDrag(false)});
     row.append(inp,del,handle);group.append(row)});
-   const add=h('button','addtask','＋ ToDoを追加');add.onclick=()=>{state.tasksByDate[id].push('');save();render(false);const groups=sheet.querySelectorAll('.task-day'),gi=get8Days().findIndex(x=>iso(x)===id),last=groups[gi]?.querySelectorAll('input');const target=last?.[last.length-1];if(target){target.focus();target.scrollIntoView({block:'nearest'})}};head.append(add);sheet.append(group);
+   const add=h('button','addtask','＋ ToDoを追加');add.onclick=()=>{state.tasksByDate[id].push('');save();pendingNewTodo=true;render(false);pendingNewTodo=false;const groups=sheet.querySelectorAll('.task-day'),gi=get8Days().findIndex(x=>iso(x)===id),last=groups[gi]?.querySelectorAll('input');const target=last?.[last.length-1];if(target){target.focus();target.scrollIntoView({block:'nearest'})}};head.append(add);sheet.append(group);
   });
   const box=h('section','memo'),area=h('textarea');
   area.value=state.memo;area.placeholder='ここにメモを入力';area.setAttribute('aria-label','メモ');
