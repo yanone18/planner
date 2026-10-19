@@ -255,6 +255,51 @@ const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date
  };
  const rangeEnd=r=>{const d=new Date(r.start+'T12:00:00');d.setDate(d.getDate()+r.days);return iso(d)};
  const activeRanges=id=>state.ranges.filter(r=>r.start<=id&&id<=rangeEnd(r));
+ // Schedule -> ToDo is a one-time copy per source item and date.
+ // Imported items are ordinary ToDos; edits, deletion and dragging never change the schedule.
+ const todoTextFromSchedule=text=>{
+  const graphemes=typeof Intl.Segmenter==='function'
+   ?[...new Intl.Segmenter('ja',{granularity:'grapheme'}).segment(text)].map(x=>x.segment)
+   :Array.from(text);
+  const isEmoji=s=>/\p{Extended_Pictographic}|[0-9#*]\uFE0F?\u20E3/u.test(s);
+  let first=0;
+  while(first<graphemes.length&&/^\s$/u.test(graphemes[first]))first++;
+  if(first<graphemes.length&&isEmoji(graphemes[first]))graphemes.splice(first,1);
+  return graphemes.join('').trim();
+ };
+ const importScheduleToTodos=()=>{
+  if(!state.todoImported||typeof state.todoImported!=='object'||Array.isArray(state.todoImported))state.todoImported={};
+  let changed=false;
+  for(const day of get8Days()){
+   const id=iso(day);
+   const tasks=state.tasksByDate[id]||(state.tasksByDate[id]=[]);
+   const done=state.todoImported[id]||(state.todoImported[id]=[]);
+   const known=new Set(done);
+   const items=[];
+   // Ordinary schedule items, including the original date of a repeating rule.
+   splitEvents(state.schedule[id]||'').forEach((text,index)=>{
+    items.push({key:'ordinary:'+index,text});
+   });
+   // Generated repeat dates are copied independently, respecting one-day exceptions.
+   repeatEvents(id).filter(x=>x.rule.start!==id).forEach(x=>{
+    items.push({key:'repeat:'+x.rule.uid,text:x.text});
+   });
+   // A multi-day range is copied on every date, including arrow-only dates.
+   activeRanges(id).forEach(r=>{
+    items.push({key:'range:'+r.uid,text:r.text});
+   });
+   for(const item of items){
+    const text=todoTextFromSchedule(item.text);
+    if(!text||known.has(item.key))continue;
+    tasks.push(text);
+    done.push(item.key);
+    known.add(item.key);
+    changed=true;
+   }
+  }
+  if(changed)save();
+ };
+
  const rangePosition=r=>({left:'left',center:'center',right:'right'})[r.position]||'left';
  const rangeSettings=(r=null,day=null,prefill='')=>{
   const backdrop=h('div','dialog-backdrop'),panel=h('div','dialog');
@@ -442,6 +487,7 @@ const startTodoDrag=(e,row,date,index,handle)=>{
 };
 const render=restore=>{
  carryOverTodos();
+ importScheduleToTodos();
  tabs();const sheet=$('sheet');sheet.replaceChildren();sheet.classList.remove('transition-in-left','transition-in-right');
  $('status').textContent=current;$('today').classList.add('hidden');
  if(current==='予定表'){
