@@ -284,6 +284,18 @@ const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date
   const options=[...items.map(text=>({label:'設定：'+text,action:()=>rangeSettings(null,id,text)})),...existing.map(r=>({label:'変更：'+r.text,action:()=>rangeSettings(r)})),{label:'キャンセル'}];
   showDialog('複数日設定','対象の予定を選んでください。',options);
  };
+ // Position the stem between the first and second non-emoji characters.
+ const rangeStemOffset=text=>{
+  const segments=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter('ja',{granularity:'grapheme'}).segment(text)].map(s=>s.segment):Array.from(text);
+  const isEmoji=s=>/\p{Extended_Pictographic}|[0-9#*]\uFE0F?\u20E3/u.test(s);
+  let index=0;
+  while(index<segments.length&&isEmoji(segments[index]))index++;
+  const prefix=segments.slice(0,Math.min(segments.length,index+1)).join('');
+  const canvas=rangeStemOffset.canvas||(rangeStemOffset.canvas=document.createElement('canvas'));
+  const ctx=canvas.getContext('2d');
+  ctx.font='17px -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", sans-serif';
+  return ctx.measureText(prefix).width;
+ };
  const decorateRanges=()=>{
   if(current!=='予定表')return;
   const todayKey=iso(today()),sheet=$('sheet');
@@ -295,16 +307,17 @@ const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date
    const firstDay=ranges.filter(r=>id===(r.start>todayKey?r.start:todayKey));
    const width=entry.clientWidth;
    // Keep the original single-line input to the right of every occupied track.
-   const trackXs=ranges.map(r=>Math.round(width*rangePosition(r)));
+   const trackXs=ranges.map(r=>Math.round(width*rangePosition(r))+rangeStemOffset(r.text));
    const maxTrack=Math.max(...trackXs);
    const indent=Math.min(width-45,Math.max(0,maxTrack+17));
    inp.style.marginLeft=indent+'px';
    const layer=h('div','range-layer');entry.insertBefore(layer,inp);
    for(const r of ranges){
-    const x=Math.round(width*rangePosition(r))+5;
+    const labelLeft=Math.max(0,Math.round(width*rangePosition(r))-5);
+    const x=labelLeft+2+rangeStemOffset(r.text);
     const start= id===(r.start>todayKey?r.start:todayKey);
     const end=id===rangeEnd(r);
-    if(start){const lbl=h('span','range-label'+(state.rest[id]?' rest':''),r.text);lbl.style.left=Math.max(0,x-10)+'px';lbl.title='タップして複数日設定を変更';lbl.onclick=()=>rangeSettings(r);layer.append(lbl)}
+    if(start){const lbl=h('span','range-label'+(state.rest[id]?' rest':''),r.text);lbl.style.left=labelLeft+'px';lbl.title='タップして複数日設定を変更';lbl.onclick=()=>rangeSettings(r);layer.append(lbl)}
     if(!end){const line=h('span','range-line');line.style.left=x+'px';line.style.top=start?'31px':'0px';line.style.height=start?'calc(100% - 4px)':'calc(100% + 1px)';layer.append(line)}
    }
   }
