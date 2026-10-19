@@ -49,6 +49,7 @@ button,input,textarea{font:inherit}
 .range-button{display:none;flex:none;width:32px;height:32px;padding:4px;border:0;background:transparent;color:#315f97;align-items:center;justify-content:center}
 .range-button svg{width:22px;height:22px}
 .entry input{position:relative;z-index:2}
+.entry{position:relative}
 .range-layer{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:visible}
 .range-line{position:absolute;width:2px;background:#3973b5;transform:translateX(-50%);pointer-events:none}
 .range-line::after{content:'';position:absolute;bottom:0;left:50%;width:7px;height:7px;border-right:2px solid #3973b5;border-bottom:2px solid #3973b5;transform:translate(-50%,-2px) rotate(45deg)}
@@ -339,7 +340,7 @@ const render=restore=>{
     });
    inputEvents(inp);
    const rep=h('button','repeat-button','↻');rep.type='button';rep.setAttribute('aria-label','繰り返し設定');rep.addEventListener('pointerdown',e=>e.preventDefault());rep.onclick=()=>{if(active)active.blur();setTimeout(()=>{if(!document.querySelector('.dialog-backdrop'))repeatDialog(id)},0)};
-   const multi=h('button','range-button');multi.type='button';multi.setAttribute('aria-label','複数日設定');multi.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v16m-6-6 6 6 6-6"/><path d="M5 3h14"/></svg>';multi.addEventListener('pointerdown',e=>e.preventDefault());multi.onclick=()=>{if(active)active.blur();setTimeout(()=>{if(!document.querySelector('.dialog-backdrop'))rangePicker(id)},0)};entry.append(inp,multi,rep);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
+   const multi=h('button','range-button');multi.type='button';multi.setAttribute('aria-label','複数日設定');multi.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v16m-6-6 6 6 6-6"/><path d="M5 3h14"/></svg>';multi.addEventListener('pointerdown',e=>e.preventDefault());multi.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();rangePicker(id)});entry.append(inp,multi,rep);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
   }
   decorateRanges();sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){
