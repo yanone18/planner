@@ -39,13 +39,23 @@ button,input,textarea{font:inherit}
 .month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:16px;font-weight:500}
 .date.sat,.task-date.sat{color:#1769bd}
 .date.sun,.task-date.sun{color:#c03d4a}
-.entry{flex:1;min-width:0;display:flex;align-items:center;padding:1px 9px 1px 2px}
+.entry{flex:1;min-width:0;display:flex;align-items:center;padding:1px 9px 1px 2px;position:relative}
 .entry input,.taskrow input{width:100%;min-width:0;background:transparent;border:0;outline:0;font-size:17px;color:#243247;padding:5px 2px;border-radius:0}
 .entry input:not(:focus){-webkit-user-select:none;user-select:none}
 .entry input:focus{-webkit-user-select:text;user-select:text}
 .entry input:focus,.taskrow input:focus{background:transparent}
 .repeat-button{display:none;flex:none;width:32px;height:32px;padding:4px;border:0;background:transparent;color:#315f97;font-size:24px;align-items:center;justify-content:center}
-.entry:focus-within .repeat-button{display:flex}
+ .entry:focus-within .repeat-button,.entry:focus-within .range-button{display:flex}
+.range-button{display:none;flex:none;width:32px;height:32px;padding:4px;border:0;background:transparent;color:#315f97;align-items:center;justify-content:center}
+.range-button svg{width:22px;height:22px}
+.entry input{position:relative;z-index:2}
+.range-layer{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:visible}
+.range-line{position:absolute;width:2px;background:#3973b5;transform:translateX(-50%);pointer-events:none}
+.range-line::after{content:'';position:absolute;bottom:0;left:50%;width:7px;height:7px;border-right:2px solid #3973b5;border-bottom:2px solid #3973b5;transform:translate(-50%,-2px) rotate(45deg)}
+.range-label{position:absolute;top:2px;height:28px;display:flex;align-items:center;white-space:nowrap;font-size:17px;color:#243247;background:#fff;z-index:2;pointer-events:auto;cursor:pointer;padding:0 2px}
+.range-label.rest{background:#fff9df}
+.range-line.terminal::after{display:none}
+.range-line.terminal{display:none}
 .task-day{margin:8px 10px 12px;padding:0 0 7px;border-radius:10px;background:#f7f9fc;overflow:visible}
 .task-day.rest{background:#fff9df}
 .task-date > span:first-child{display:inline-flex;align-items:center;gap:9px}
@@ -105,7 +115,8 @@ const color=d=>d.getDay()===0?'sun':d.getDay()===6?'sat':'';
 const h=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el};
 const storageKey='planner-prototype-v1';
 let state;try{state=JSON.parse(localStorage.getItem(storageKey))}catch{}
-state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[]},state||{});
+state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[],ranges:[]},state||{});
+ if(!Array.isArray(state.ranges))state.ranges=[];
 if(!state.tasksByDate)state.tasksByDate={};
 // Remove obsolete repeat rules; preserve manually entered original schedule entries.
 state.repeats=Array.isArray(state.repeats)?state.repeats:[];state.repeatExceptions=state.repeatExceptions||{};
@@ -314,7 +325,7 @@ const render=restore=>{
   const start=today(),end=new Date(start.getFullYear()+5,start.getMonth(),start.getDate());let d=new Date(start);
   let shownMonth='';
   while(d<=end){const id=iso(d),monthKey=`${d.getFullYear()}-${d.getMonth()}`;if(monthKey!==shownMonth){const mh=h('div','month-header',monthLabel(d));sheet.append(mh);shownMonth=monthKey}const row=h('div','dayrow'+(state.rest[id]?' rest':'')),date=h('div','date '+color(d),label(d)),entry=h('div','entry'),inp=h('input');
-   date.title='タップで休みを切り替え';date.onclick=()=>{if(editing)return;state.rest[id]=!state.rest[id];save();row.classList.toggle('rest',!!state.rest[id])};
+   row.dataset.date=id;date.title='タップで休みを切り替え';date.onclick=()=>{if(editing)return;state.rest[id]=!state.rest[id];save();row.classList.toggle('rest',!!state.rest[id])};
    inp.type='text';inp.value=scheduleValue(id);inp.setAttribute('aria-label',`${id}の予定`);
     let initial=inp.value,hadRepeats=false;
     inp.addEventListener('focus',()=>{initial=inp.value;hadRepeats=state.repeats.some(r=>occurrence(r,id))});
@@ -328,9 +339,9 @@ const render=restore=>{
     });
    inputEvents(inp);
    const rep=h('button','repeat-button','↻');rep.type='button';rep.setAttribute('aria-label','繰り返し設定');rep.addEventListener('pointerdown',e=>e.preventDefault());rep.onclick=()=>{if(active)active.blur();setTimeout(()=>{if(!document.querySelector('.dialog-backdrop'))repeatDialog(id)},0)};
-   entry.append(inp,rep);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
+   const multi=h('button','range-button');multi.type='button';multi.setAttribute('aria-label','複数日設定');multi.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v16m-6-6 6 6 6-6"/><path d="M5 3h14"/></svg>';multi.addEventListener('pointerdown',e=>e.preventDefault());multi.onclick=()=>{if(active)active.blur();setTimeout(()=>{if(!document.querySelector('.dialog-backdrop'))rangePicker(id)},0)};entry.append(inp,multi,rep);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
   }
-  sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
+  decorateRanges();sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){
   get8Days().forEach(d=>{
    const id=iso(d),group=h('section','task-day'),head=h('div','task-date '+color(d));group.classList.toggle('rest',!!state.rest[id]);head.classList.toggle('rest',!!state.rest[id]);group.dataset.date=id;head.append(h('span','',label(d)));group.append(head);
@@ -389,7 +400,7 @@ restorePicker.addEventListener('change',async()=>{
    {label:'復元する',primary:true,action:()=>{
     try{
      localStorage.setItem(storageKey,JSON.stringify(data.data));
-     state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[]},data.data);
+     state=Object.assign({order:['予定表','ToDo'],schedule:{},rest:{},tasks:[],tasksByDate:{},memo:'',trash:[],repeats:[],ranges:[]},data.data);if(!Array.isArray(state.ranges))state.ranges=[];
      state.repeatExceptions=state.repeatExceptions||{};state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
      if(active)active.blur();active=null;editing=false;current='ToDo';scrolls={};render(false);
      showDialog('復元完了','バックアップのデータを復元しました。',[{label:'閉じる',primary:true}]);
