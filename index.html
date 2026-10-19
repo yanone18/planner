@@ -33,7 +33,7 @@ button,input,textarea{font:inherit}
 .sheet.transition-in-left{animation:slideFromLeft .22s ease-out}
 @keyframes slideFromRight{from{transform:translateX(28px);opacity:.65}to{transform:translateX(0);opacity:1}}
 @keyframes slideFromLeft{from{transform:translateX(-28px);opacity:.65}to{transform:translateX(0);opacity:1}}
-.dayrow{min-height:38px;display:flex;align-items:stretch;background:#fff;border-bottom:1px solid #edf0f4}
+.dayrow{position:relative;min-height:38px;display:flex;align-items:stretch;background:#fff;border-bottom:1px solid #edf0f4}
 .dayrow.rest{background:#fff9df}
 .date{width:76px;flex:0 0 76px;display:flex;align-items:center;justify-content:flex-end;padding:0 4px 0 10px;text-align:right;font-size:16px;white-space:nowrap;user-select:none;color:#526175;border:0}
 .month-header{position:sticky;top:0;z-index:3;min-height:31px;display:flex;align-items:center;padding:5px 10px;background:#fff;border-bottom:1px solid #edf0f4;color:#526175;font-size:16px;font-weight:500}
@@ -50,7 +50,7 @@ button,input,textarea{font:inherit}
 .range-button svg{width:22px;height:22px}
 .entry input{position:relative;z-index:2}
 .entry{position:relative}
-.range-layer{position:absolute;inset:0;pointer-events:none;z-index:1;overflow:visible}
+.range-layer{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:visible}
 .range-line{position:absolute;width:2px;background:#3973b5;transform:translateX(-50%);pointer-events:none}
 .range-line.arrow-end::after{content:'';position:absolute;bottom:0;left:50%;width:7px;height:7px;border-right:2px solid #3973b5;border-bottom:2px solid #3973b5;transform:translate(-50%,-2px) rotate(45deg)}
 .range-label{position:absolute;top:2px;height:28px;display:flex;align-items:center;white-space:nowrap;font-size:17px;color:#243247;background:#fff;z-index:4;pointer-events:auto;cursor:pointer;padding:0 2px}
