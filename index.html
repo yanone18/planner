@@ -50,6 +50,7 @@ button,input,textarea{font:inherit}
 .range-button svg{width:22px;height:22px}
 .entry input{position:relative;z-index:2}
 .entry{position:relative}
+.range-overlay{position:absolute;left:0;top:0;width:100%;pointer-events:none;z-index:6;overflow:visible}
 .range-layer{position:absolute;inset:0;pointer-events:none;z-index:3;overflow:visible}
 .range-line{position:absolute;width:2px;background:#3973b5;transform:translateX(-50%);pointer-events:none}
 .range-line.arrow-end::after{content:'';position:absolute;bottom:0;left:50%;width:7px;height:7px;border-right:2px solid #3973b5;border-bottom:2px solid #3973b5;transform:translate(-50%,-2px) rotate(45deg)}
@@ -350,6 +351,24 @@ const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date
     const boundary=Math.max(...leftTracks.map(o=>o.x))+16;
     inp.style.marginLeft=Math.min(width-45,boundary)+'px';
     inp.style.width='auto';
+   }
+  }
+  // Paint every range stroke in ONE overlay above all day rows and their borders.
+  // Keeping strokes inside each row causes the next row background to cover them.
+  const strokes=[...sheet.querySelectorAll('.range-layer .range-line')];
+  if(strokes.length){
+   const overlay=h('div','range-overlay');
+   overlay.style.height=sheet.scrollHeight+'px';
+   const sheetRect=sheet.getBoundingClientRect();
+   const positions=strokes.map(line=>{
+    const rect=line.getBoundingClientRect();
+    return {line,x:rect.left-sheetRect.left+sheet.scrollLeft+rect.width/2,
+      y:rect.top-sheetRect.top+sheet.scrollTop,height:rect.height};
+   });
+   sheet.append(overlay);
+   for(const {line,x,y,height} of positions){
+    line.style.left=x+'px';line.style.top=y+'px';line.style.height=height+'px';
+    overlay.append(line);
    }
   }
  };
