@@ -399,7 +399,11 @@ const render=restore=>{
     });
    inputEvents(inp);
    const rep=h('button','repeat-button','↻');rep.type='button';rep.setAttribute('aria-label','繰り返し設定');rep.addEventListener('pointerdown',e=>e.preventDefault());rep.onclick=()=>{if(active)active.blur();setTimeout(()=>{if(!document.querySelector('.dialog-backdrop'))repeatDialog(id)},0)};
-   const multi=h('button','range-button');multi.type='button';multi.setAttribute('aria-label','複数日設定');multi.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v16m-6-6 6 6 6-6"/><path d="M5 3h14"/></svg>';multi.addEventListener('pointerdown',e=>e.preventDefault());multi.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();rangePicker(id)});entry.append(inp,multi,rep);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
+   const multi=h('button','range-button');multi.type='button';multi.setAttribute('aria-label','複数日設定');multi.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v16m-6-6 6 6 6-6"/><path d="M5 3h14"/></svg>';// Keep the icon available while tapping on iOS; open on touchend, with click fallback.
+   let lastTouchOpen=0;
+   const openMulti=()=>{if(active)active.blur();editing=false;active=null;rangePicker(id)};
+   multi.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();lastTouchOpen=Date.now();openMulti()},{passive:false});
+   multi.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(Date.now()-lastTouchOpen>700)openMulti()});entry.append(inp,multi,rep);row.append(date,entry);sheet.append(row);d.setDate(d.getDate()+1);
   }
   decorateRanges();sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
  }else if(current==='ToDo'){
