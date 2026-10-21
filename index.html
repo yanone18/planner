@@ -23,9 +23,9 @@ button,input,textarea{font:inherit}
 .tab{flex:1;min-width:0;padding:14px 2px;background:transparent;border:0;border-bottom:2px solid transparent;color:#78879a;font-weight:600;font-size:16px;touch-action:pan-y}
 .tab.active{background:#fff;color:#294f83;border-bottom-color:#3973b5}
 .tab.reorder-source{background:#edf4ff;color:#294f83;border-radius:8px}.tab.reorder-target{outline:2px dashed #8aa8cf;outline-offset:-3px;border-radius:8px}
-.toolbar{flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 12px 5px;background:#fff;min-height:26px}
-.toolbar span{font-size:11px;color:#758397}
-.menu{border:0;background:transparent;font-size:21px;color:#315f97;padding:0 3px;line-height:1.2}
+.toolbar{position:relative;z-index:10;isolation:isolate;flex:none;display:flex;align-items:center;justify-content:space-between;padding:8px 12px 9px;background:#fff;min-height:42px;transform:translateZ(0)}
+.toolbar span{font-size:13px;font-weight:600;color:#526175}
+.menu{border:0;background:#fff;font-size:24px;font-weight:700;color:#294f83;padding:2px 5px;line-height:1.2;opacity:1}
 .note{flex:none;padding:6px 12px;background:#f7f9fc;font-size:11px;color:#60718a;border-bottom:1px solid #e5ebf2}
 .sheet{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:#fff;scrollbar-width:none}
 .sheet::-webkit-scrollbar{display:none}
