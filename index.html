@@ -439,31 +439,37 @@ const tabs=()=>{const bar=$('tabs');bar.replaceChildren();state.order.forEach(na
  b.oncontextmenu=e=>{e.preventDefault();reorderSource=name;reorderTarget=name;paintTabReorder();$('status').textContent='タブを左右に動かして並び替え'};
  b.onclick=()=>{if(reorderSource){finishTabReorder();return}if(reorderTriggered){reorderTriggered=false;return}switchTo(name)};bar.append(b)})};
 // Keep the expensive five-year schedule DOM while viewing ToDo.
-let scheduleCache=null, scheduleCacheDate='';
+// Keep the schedule attached to the document instead of moving thousands of day rows.
+let scheduleSheet=null, scheduleSheetDate='';
 const switchTo=name=>{
  if(name===current)return;
  if(editing&&active)active.blur();editing=false;active=null;
  const sheet=$('sheet');scrolls[current]=sheet.scrollTop;
  transitionDirection=state.order.indexOf(name)>state.order.indexOf(current)?1:-1;
  if(current==='予定表'){
-  scheduleCache=document.createDocumentFragment();
-  while(sheet.firstChild)scheduleCache.appendChild(sheet.firstChild);
-  scheduleCacheDate=iso(today());
- }
- current=name;
- // Update the switch immediately, before any potentially expensive work.
- $('tabs').querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.textContent===name));
- $('status').textContent=name;
- if(name==='予定表'&&scheduleCache&&scheduleCacheDate===iso(today())){
-  sheet.replaceChildren(scheduleCache);scheduleCache=null;
-  sheet.classList.remove('transition-in-left','transition-in-right');
-  sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
-  sheet.scrollTop=scrolls[name]||0;
-  $('today').classList.toggle('hidden',sheet.scrollTop<50);
+  scheduleSheet=sheet;
+  scheduleSheetDate=iso(today());
+  sheet.removeAttribute('id');
+  sheet.style.display='none';
+  const next=h('main','sheet');next.id='sheet';
+  sheet.parentNode.insertBefore(next,sheet.nextSibling);
+  current=name;
+  render(true);
   return;
  }
- scheduleCache=null;
- render(true);
+ if(name==='予定表'&&scheduleSheet&&scheduleSheetDate===iso(today())){
+  sheet.remove();
+  scheduleSheet.id='sheet';
+  scheduleSheet.style.display='';
+  current=name;
+  tabs();$('status').textContent=name;
+  scheduleSheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||scheduleSheet.scrollTop<50)};
+  scheduleSheet.scrollTop=scrolls[name]||0;
+  $('today').classList.toggle('hidden',scheduleSheet.scrollTop<50);
+  return;
+ }
+ if(scheduleSheet){scheduleSheet.remove();scheduleSheet=null;}
+ current=name;render(true);
 };
 // Drag handles are only shown on the focused ToDo. Pointer movement does not select text.
 let todoDrag=null;
@@ -515,6 +521,7 @@ const startTodoDrag=(e,row,date,index,handle)=>{
  todoDrag.lastX=e.clientX;todoDrag.lastY=e.clientY;updateTodoDrag(e.clientX,e.clientY);todoDrag.frame=requestAnimationFrame(autoScrollDrag);
 };
 const render=restore=>{
+ if(current==='予定表'&&scheduleSheet&&scheduleSheet!==$('sheet')){scheduleSheet.remove();scheduleSheet=null;}
  carryOverTodos();
  importScheduleToTodos();
  tabs();const sheet=$('sheet');sheet.replaceChildren();sheet.classList.remove('transition-in-left','transition-in-right');
