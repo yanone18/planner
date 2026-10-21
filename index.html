@@ -21,7 +21,7 @@ button,input,textarea{font:inherit}
 .brand{text-align:center;font-size:10px;letter-spacing:.2em;margin:0 0 5px;color:#758397}
 .tabs{position:relative;display:flex;gap:0;min-height:58px;align-items:stretch;padding:5px 15px;isolation:isolate}
 .tabs::before{content:"";position:absolute;inset:5px 15px;border-radius:999px;background:#edf1f6;z-index:-2}
-.tabs::after{content:"";position:absolute;top:9px;bottom:9px;left:19px;width:calc((100% - 38px)/2);border-radius:999px;background:#fff;box-shadow:0 2px 7px #263e6224;z-index:-1;transform:translateX(0);transition:transform .22s ease}
+.tabs::after{content:"";position:absolute;top:9px;bottom:9px;left:19px;width:calc((100% - 38px)/2);border-radius:999px;background:#fff;box-shadow:0 2px 7px #263e6224;z-index:-1;transform:translateX(0);transition:transform .12s ease}
 .tabs:has(.tab:nth-child(2).active)::after{transform:translateX(100%)}
 .tab{flex:1;min-width:0;padding:14px 2px;background:transparent;border:0;color:#78879a;font-weight:600;font-size:16px;touch-action:pan-y;position:relative;z-index:1;cursor:pointer}
 .tab.active{background:transparent;color:#294f83}
@@ -438,7 +438,33 @@ const tabs=()=>{const bar=$('tabs');bar.replaceChildren();state.order.forEach(na
  b.addEventListener('touchcancel',()=>{clearTimeout(reorderTimer);if(reorderSource){reorderSource=null;reorderTarget=null;$('status').textContent=current;tabs()}},{passive:true});
  b.oncontextmenu=e=>{e.preventDefault();reorderSource=name;reorderTarget=name;paintTabReorder();$('status').textContent='タブを左右に動かして並び替え'};
  b.onclick=()=>{if(reorderSource){finishTabReorder();return}if(reorderTriggered){reorderTriggered=false;return}switchTo(name)};bar.append(b)})};
-const switchTo=name=>{if(name===current)return;if(editing&&active)active.blur();editing=false;active=null;scrolls[current]=$('sheet').scrollTop;transitionDirection=state.order.indexOf(name)>state.order.indexOf(current)?1:-1;current=name;render(true)};
+// Keep the expensive five-year schedule DOM while viewing ToDo.
+let scheduleCache=null, scheduleCacheDate='';
+const switchTo=name=>{
+ if(name===current)return;
+ if(editing&&active)active.blur();editing=false;active=null;
+ const sheet=$('sheet');scrolls[current]=sheet.scrollTop;
+ transitionDirection=state.order.indexOf(name)>state.order.indexOf(current)?1:-1;
+ if(current==='予定表'){
+  scheduleCache=document.createDocumentFragment();
+  while(sheet.firstChild)scheduleCache.appendChild(sheet.firstChild);
+  scheduleCacheDate=iso(today());
+ }
+ current=name;
+ // Update the switch immediately, before any potentially expensive work.
+ $('tabs').querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.textContent===name));
+ $('status').textContent=name;
+ if(name==='予定表'&&scheduleCache&&scheduleCacheDate===iso(today())){
+  sheet.replaceChildren(scheduleCache);scheduleCache=null;
+  sheet.classList.remove('transition-in-left','transition-in-right');
+  sheet.onscroll=()=>{$('today').classList.toggle('hidden',editing||sheet.scrollTop<50)};
+  sheet.scrollTop=scrolls[name]||0;
+  $('today').classList.toggle('hidden',sheet.scrollTop<50);
+  return;
+ }
+ scheduleCache=null;
+ render(true);
+};
 // Drag handles are only shown on the focused ToDo. Pointer movement does not select text.
 let todoDrag=null;
 const clearDropMarks=()=>{$('sheet').querySelectorAll('.drop-before,.drop-after,.drop-empty').forEach(el=>el.classList.remove('drop-before','drop-after','drop-empty'))};
