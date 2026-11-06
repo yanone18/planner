@@ -1,5 +1,5 @@
 'use strict';
-const CACHE_NAME = 'planner-offline-v27';
+const CACHE_NAME = 'planner-offline-v28';
 const APP_FILES = ['./', './index.html', './manifest.webmanifest', './apple-touch-icon.PNG'];
 
 self.addEventListener('install', event => {
@@ -23,16 +23,20 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
+    // Show the cached app immediately; refresh it in the background.
+    const update = fetch(request)
+      .then(response => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          return caches.open(CACHE_NAME).then(cache => cache.put('./index.html', copy)).then(() => response);
+        }
+        return response;
+      })
+      .catch(() => null);
+
+    event.waitUntil(update.then(() => {}));
     event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put('./index.html', copy));
-          }
-          return response;
-        })
-        .catch(async () => (await caches.match(request)) || (await caches.match('./index.html')) || Response.error())
+      caches.match('./index.html').then(cached => cached || update.then(response => response || Response.error()))
     );
     return;
   }

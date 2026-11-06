@@ -149,6 +149,33 @@ const carryOverTodos=()=>{
  state.tasksByDate[key]=[...moved,...(state.tasksByDate[key]||[])];
  save();
 };
+// Remove expired history while preserving future recurrence rules and active multi-day ranges.
+const cleanupPastData=()=>{
+ const key=iso(today()),validDate=k=>/^\d{4}-\d{2}-\d{2}$/.test(k);
+ let changed=false;
+ for(const bucket of ['schedule','rest','todoImported']){
+  const data=state[bucket];
+  if(!data||typeof data!=='object'||Array.isArray(data))continue;
+  for(const date of Object.keys(data)){
+   if(validDate(date)&&date<key){delete data[date];changed=true;}
+  }
+ }
+ if(state.repeatExceptions&&typeof state.repeatExceptions==='object'){
+  for(const k of Object.keys(state.repeatExceptions)){
+   const date=k.slice(k.lastIndexOf('|')+1);
+   if(validDate(date)&&date<key){delete state.repeatExceptions[k];changed=true;}
+  }
+ }
+ if(Array.isArray(state.ranges)){
+  const kept=state.ranges.filter(r=>{
+   if(!r||typeof r.start!=='string'||!validDate(r.start))return true;
+   const end=rangeEnd(r);
+   return !validDate(end)||end>=key;
+  });
+  if(kept.length!==state.ranges.length){state.ranges=kept;changed=true;}
+ }
+ if(changed)save();
+};
 const get8Days=()=>{const arr=[],d=today();for(let i=0;i<8;i++){const x=new Date(d);x.setDate(d.getDate()+i);arr.push(x)}return arr};
  const splitEvents=text=>{
   const parts=[];let current='';
@@ -566,6 +593,7 @@ const id=iso(d),monthKey=`${d.getFullYear()}-${d.getMonth()}`;if(monthKey!==sche
 const render=restore=>{
  if(current==='予定表'&&scheduleSheet&&scheduleSheet!==$('sheet')){scheduleSheet.remove();scheduleSheet=null;}
  carryOverTodos();
+ cleanupPastData();
  importScheduleToTodos();
  tabs();const sheet=$('sheet');sheet.replaceChildren();sheet.classList.remove('transition-in-left','transition-in-right');
  $('status').textContent=current;$('today').classList.add('hidden');
