@@ -119,7 +119,48 @@ const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${Str
 const weekday=['日','月','火','水','木','金','土'];
 const label=d=>`${d.getDate()}日(${weekday[d.getDay()]})`;
 const monthLabel=d=>`${d.getFullYear()}年${d.getMonth()+1}月`;
-const color=d=>d.getDay()===0?'sun':d.getDay()===6?'sat':'';
+// Japanese national holidays (current statutory rules). Cached per year for offline use.
+const holidayCache=new Map();
+const nthMonday=(year,month,n)=>{
+ const first=new Date(year,month-1,1).getDay();
+ return new Date(year,month-1,1+((8-first)%7)+(n-1)*7);
+};
+const equinoxDay=(year,spring)=>{
+ const y=year-1980;
+ return Math.floor((spring?20.8431:23.2488)+0.242194*y-Math.floor(y/4));
+};
+const japaneseHolidays=year=>{
+ if(holidayCache.has(year))return holidayCache.get(year);
+ const base=new Set(), add=(m,d)=>base.add(iso(new Date(year,m-1,d)));
+ add(1,1);add(2,11);add(2,23);add(4,29);add(5,3);add(5,4);add(5,5);
+ add(8,11);add(11,3);add(11,23);
+ [nthMonday(year,1,2),nthMonday(year,7,3),nthMonday(year,9,3),nthMonday(year,10,2)].forEach(d=>base.add(iso(d)));
+ if(year>=1980&&year<=2099){add(3,equinoxDay(year,true));add(9,equinoxDay(year,false));}
+ // Citizen's holidays: a weekday between two national holidays.
+ const all=new Set(base);
+ for(let month=0;month<12;month++){
+  const days=new Date(year,month+1,0).getDate();
+  for(let day=2;day<days;day++){
+   const id=iso(new Date(year,month,day));
+   if(!base.has(id)){
+    const prev=iso(new Date(year,month,day-1)),next=iso(new Date(year,month,day+1));
+    if(base.has(prev)&&base.has(next))all.add(id);
+   }
+  }
+ }
+ // Substitute holiday: the first non-holiday after a Sunday national holiday.
+ for(const id of base){
+  const d=new Date(id+'T12:00:00');
+  if(d.getDay()!==0)continue;
+  for(let n=1;n<=7;n++){
+   const next=new Date(d);next.setDate(d.getDate()+n);const key=iso(next);
+   if(!all.has(key)){all.add(key);break;}
+  }
+ }
+ holidayCache.set(year,all);return all;
+};
+const isJapaneseHoliday=d=>japaneseHolidays(d.getFullYear()).has(iso(d));
+const color=d=>isJapaneseHoliday(d)||d.getDay()===0?'sun':d.getDay()===6?'sat':'';
 const h=(tag,cls,text)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(text!==undefined)el.textContent=text;return el};
 const storageKey='planner-prototype-v1';
 let state;try{state=JSON.parse(localStorage.getItem(storageKey))}catch{}
