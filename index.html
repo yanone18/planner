@@ -83,7 +83,7 @@ button,input,textarea{font:inherit}
 .drag-ghost{position:fixed;z-index:50;pointer-events:none;background:#e9f2ff;border:1px solid #3973b5;border-radius:6px;padding:8px 12px;color:#243247;box-shadow:0 4px 14px #263e6230;max-width:75vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px}
 .sheet.dragging-todo{touch-action:none}
 .taskrow.swiped input{transform:translateX(-66px)}
-.delete{display:none;position:absolute;z-index:1;right:0;top:0;bottom:0;width:64px;border:0;background:#b94350;color:#fff;font-size:14px;padding:0;min-height:0}
+.delete{display:none;position:absolute;z-index:3;right:5px;top:4px;bottom:4px;width:58px;border:1px solid #a93643;border-radius:999px;background:linear-gradient(180deg,#d85b67 0%,#b94350 100%);color:#fff;font-size:13px;font-weight:600;letter-spacing:.04em;padding:0;min-height:0;box-shadow:inset 0 1px 0 #ffffff45,0 2px 4px #812b3526;touch-action:manipulation}
 .taskrow.swiped .delete{display:block}
 .addtask{margin-left:auto;flex:none;width:auto;text-align:right;padding:3px 0 3px 12px;border:0;background:transparent;color:#71849b;font-size:13px;font-weight:400;white-space:nowrap}
 .memo{padding:12px 15px 25px;background:#fff;display:flex;flex-direction:column;min-height:320px;border-top:1px solid #dfe5ee}
@@ -171,7 +171,8 @@ if(!state.tasksByDate)state.tasksByDate={};
 state.repeats=Array.isArray(state.repeats)?state.repeats:[];state.repeatExceptions=state.repeatExceptions||{};
 state.repeatExceptions=state.repeatExceptions||{};state.order=state.order.filter(n=>n!=='メモ');if(!state.order.includes('予定表'))state.order.unshift('予定表');if(!state.order.includes('ToDo'))state.order.push('ToDo');
 // Preserve the previous single ToDo list by moving it to today's list only once.
-if(Array.isArray(state.tasks)&&state.tasks.length){
+const hadLegacyTasks=Array.isArray(state.tasks)&&state.tasks.length>0;
+if(hadLegacyTasks){
  const k=iso(today());state.tasksByDate[k]=[...(state.tasksByDate[k]||[]),...state.tasks];state.tasks=[]; 
 }
 let current=state.order.includes('ToDo')?'ToDo':state.order[0],editing=false,active=null,scrolls={},transitionDirection=1;
@@ -719,7 +720,9 @@ $('menu').onclick=()=>{
 };
 $('today').onclick=()=>{$('sheet').scrollTo({top:0,behavior:'smooth'})};
 // 画面切り替えは上部タブのタップのみ。横スワイプは各項目の操作に使う。
-save();render(false);
+// Avoid serializing the entire planner on every launch; persist only the one-time legacy migration.
+if(hadLegacyTasks)save();
+render(false);
 if('serviceWorker' in navigator && location.protocol.startsWith('http'))window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 })();
 </script>
